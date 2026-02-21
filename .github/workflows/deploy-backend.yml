@@ -43,7 +43,7 @@ jobs:
           gcloud run deploy $SERVICE_NAME \
             --source . \
             --region $REGION \
-            --set-env-vars "API_KEY=${{ secrets.API_KEY }}"
+            --set-env-vars "BACKEND_API_KEY=${{ secrets.BACKEND_API_KEY }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
 
       - name: Show URL
         run: |

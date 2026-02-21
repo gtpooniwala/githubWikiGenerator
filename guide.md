@@ -1,1272 +1,1006 @@
-# GitHub Wiki Generator - Implementation Guide
+# GitHub Wiki Generator – **Agent-Execution Implementation Guide **
+
+This is aN **execution-spec for agentic coding**.
+
+It is aligned to the **current architecture**`:
+
+* **Frontend:** Next.js (App Router, TypeScript) deployed to **GCP Cloud Run** (Docker container)
+* **Backend:** FastAPI (Python) deployed to **GCP Cloud Run** (Docker container)
+* **Core logic lives in backend** (repo fetch → analysis → LLM calls → wiki assembly)
+* **CI/CD:** GitHub Actions (Workload Identity Federation) deploys both services on push
+* Frontend contains a Next.js route handler `/api/health` that proxies to `${BACKEND_URL}/health` and the homepage currently does health checks (warm-up behavior). Use this pattern in the final product.
+
+---
 
 ## Project Overview
 
-**Goal:** Build an automatic Wiki Generator for public GitHub repositories that organizes documentation by user-facing features (not technical layers) with inline citations linking back to source code.
-
-**Time Budget:** ~5 hours of focused implementation
+**Goal:** Build an automatic Wiki Generator for public GitHub repositories that organizes documentation by **user-facing features** (not technical layers) with **inline citations** linking back to source code.
 
 **Final Deliverable:** A deployed web app where users can input a GitHub repo URL and get a navigable wiki with cited documentation.
 
 ---
 
-## ⚠️ COLLABORATIVE WORKFLOW - READ FIRST
-
-**This project is being built collaboratively with a human partner.**
+## ⚠️ Collaborative Workflow (Strict)
 
 ### How to Work
 
-1. **STOP after completing each step** (Steps 1-15)
-2. **Explain what you built** — Summarize the changes, files created/modified
-3. **Explain key decisions** — Why you chose a particular approach, tradeoffs considered
-4. **Flag any issues** — Blockers, uncertainties, deviations from the guide
-5. **Ask for feedback** — Wait for human approval before proceeding to the next step
-6. **After approval:**
-   - Update this guide file to mark the step as ✅ COMPLETED
-   - Commit all changes to git with a detailed commit message
-   - Push to the remote repository
+For each step:
 
-### Template for Each Step Completion
+1. Implement exactly the tasks listed.
+2. Run tests locally.
+3. Report:
 
-After completing a step, use this format:
+   * What was built
+   * Key decisions
+   * Tests run + results
+   * Any issues/concerns
+4. Wait for approval.
+5. After approval:
+
+   * Commit with the template below
+   * Push
+   * Verify CI passed and Cloud Run deploy succeeded
+
+### Definition of “Done” for any step
+
+A step is only complete when:
+
+1. **All tests pass** (local + CI where applicable)
+2. **You approve** the changes
+3. Changes are **committed**
+4. **Deployment succeeds** (Cloud Run revision healthy + smoke checks)
+
+### Commit Message Template
 
 ```
-## ✅ Step X Complete: [Step Name]
+Step X: <short name>
 
-### What I Built
-- [List of files created/modified]
-- [Brief description of functionality added]
+## What changed
+- ...
 
-### Key Decisions Made
-- [Decision 1]: [Why I chose this approach]
-- [Decision 2]: [Tradeoffs considered]
+## Tests
+- backend: ...
+- frontend: ...
 
-### Issues/Concerns
-- [Any blockers or uncertainties]
-- [Deviations from the guide and why]
+## Deploy
+- backend revision: ...
+- frontend revision: ...
+- smoke checks: ...
+```
 
-### Questions for You
-- [Specific questions needing input]
+### Important Rules (Agentic)
+
+* Don’t invent API contracts or data structures: follow this doc.
+* Write tests as you go (unit tests before integrating LLM calls).
+* Prefer deterministic logic and fixtures; isolate LLM calls behind an interface.
+* Any time `.gitignore` / `.dockerignore` needs change, update it immediately.
 
 ---
-Ready to proceed to Step X+1? Or would you like me to adjust anything?
-```
 
-### After Receiving Approval
+## Current Status (Already Done)
 
-Once the human approves a step, do the following **before** starting the next step:
+### Hosting / CI ✅
 
-**1. Update this guide file:**
-- Find the step header (e.g., `### STEP 1: Project Setup`)
-- Add `✅ COMPLETED` to the header (e.g., `### STEP 1: Project Setup ✅ COMPLETED`)
-- If there were any deviations or notes, add them under the step
+* Monorepo split into `frontend/` and `backend/`
+* Both deployed to Cloud Run
+* GitHub Actions uses WIF and can deploy
 
-**2. Commit and push to git:**
-```bash
-git add .
-git commit -m "<commit message>"
-git push origin main
-```
+### Frontend → backend wiring ✅
 
-**3. Commit message format:**
-```
-Step X: [Step Name]
+* Next route handler exists: `frontend/src/app/api/health/route.ts` proxying to backend
+* Homepage currently performs health checks
 
-## What was implemented
-- [File 1]: [What it does]
-- [File 2]: [What it does]
+### Known items still missing ❗
 
-## Key decisions
-- [Decision 1]
-- [Decision 2]
-
-## Tests/Validation
-- [What was tested and results]
-
-## Notes
-- [Any deviations from plan]
-- [Known limitations]
-```
-
-**Example commit message:**
-```
-Step 2: GitHub Repo Fetching
-
-## What was implemented
-- src/lib/github/types.ts: Type definitions for RepoFile, RepoMetadata, FetchedRepo
-- src/lib/github/fetch-repo.ts: GitHub API integration to fetch repo contents
-
-## Key decisions
-- Used GitHub Trees API with recursive=1 for single-request file listing
-- Implemented file filtering: excluded node_modules, dist, files >100KB
-- Added language detection based on file extension
-
-## Tests/Validation
-- Successfully fetched tastejs/todomvc (147 files after filtering)
-- README extraction working
-- Commit SHA correctly captured for permalink generation
-
-## Notes
-- Rate limit: 60 requests/hour unauthenticated
-- Large repos may need pagination (not implemented yet)
-```
-
-### Important Rules
-
-- **Do NOT proceed to the next step without explicit approval**
-- **Do NOT assume answers to ambiguous requirements** — Ask first
-- **Do NOT skip steps** — Even if they seem simple
-- **Do NOT forget to commit after approval** — Every approved step must be committed and pushed
-- **DO share your reasoning** — The human wants to understand your decisions
-- **DO flag when you disagree with the guide** — Suggest alternatives if you see a better way
-- **DO update this guide file** — Mark steps complete so progress is tracked
+* Backend local venv, dependency management, full test harness
+* Backend core pipeline implementation
+* Frontend full UI (wiki navigation + display)
+* CI test gating
 
 ---
 
 ## Tech Stack
 
-| Layer | Choice | Rationale |
-|-------|--------|-----------|
-| Framework | Next.js 14 (App Router) | SSR/SSG, API routes, easy deployment |
-| Language | TypeScript | Type safety, better DX |
-| Styling | Tailwind CSS | Fast iteration |
-| AI | OpenAI SDK (`gpt-4o-mini`) | Required by challenge |
-| Markdown | `react-markdown` + `remark-gfm` | Render wiki pages |
-| Deployment | Vercel | Zero-config Next.js hosting |
+| Layer              | Choice                                                   |
+| ------------------ | -------------------------------------------------------- |
+| Frontend           | Next.js (TypeScript)                                     |
+| Backend            | FastAPI (Python)                                         |
+| LLM                | OpenAI SDK (`gpt-5-mini` per challenge.md; backend-only key usage) |
+| Repo fetch         | GitHub REST API (with optional unauth mode)              |
+| Testing (backend)  | pytest + respx + pytest-asyncio                          |
+| Testing (frontend) | Vitest + React Testing Library (or Jest if already used) |
+| Deployment         | Cloud Run (Docker)                                       |
+| CI/CD              | GitHub Actions + WIF                                     |
 
 ---
 
-## Project Structure
+## Target Project Structure (End State)
 
 ```
-wiki-generator/
-├── src/
-│   ├── app/
-│   │   ├── page.tsx                 # Home: repo URL input
-│   │   ├── wiki/[repo]/
-│   │   │   ├── page.tsx             # Wiki home/overview
-│   │   │   └── [feature]/
-│   │   │       └── page.tsx         # Feature page
-│   │   └── api/
-│   │       └── generate/
-│   │           └── route.ts         # Main generation endpoint
-│   │
-│   ├── lib/
-│   │   ├── github/
-│   │   │   ├── fetch-repo.ts        # Download repo contents
-│   │   │   ├── parse-structure.ts   # Build file tree
-│   │   │   └── types.ts
-│   │   │
-│   │   ├── analysis/
-│   │   │   ├── chunker.ts           # Split files into chunks
-│   │   │   ├── signals.ts           # Extract entry points
-│   │   │   ├── imports.ts           # Parse import relationships
-│   │   │   └── types.ts
-│   │   │
-│   │   ├── ai/
-│   │   │   ├── openai.ts            # OpenAI client setup
-│   │   │   ├── propose-features.ts  # Feature proposal prompt
-│   │   │   ├── generate-page.ts     # Wiki page generation
-│   │   │   └── prompts.ts           # Prompt templates
-│   │   │
-│   │   ├── wiki/
-│   │   │   ├── evidence.ts          # Gather evidence per feature
-│   │   │   ├── citations.ts         # Process citations to links
-│   │   │   └── types.ts
-│   │   │
-│   │   └── store/
-│   │       └── wiki-store.ts        # In-memory store for generated wikis
-│   │
-│   └── components/
-│       ├── WikiSidebar.tsx
-│       ├── WikiPage.tsx
-│       ├── CitationLink.tsx
-│       ├── SearchBar.tsx
-│       └── LoadingState.tsx
+.
+├── backend/
+│   ├── Dockerfile
+│   ├── .dockerignore
+│   ├── requirements.txt
+│   ├── requirements-dev.txt
+│   ├── src/
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   ├── models/
+│   │   │   ├── schemas.py
+│   │   │   └── llm_schemas.py
+│   │   ├── routers/
+│   │   │   ├── health.py
+│   │   │   └── generate.py
+│   │   ├── services/
+│   │   │   ├── github_client.py
+│   │   │   ├── repo_loader.py
+│   │   │   ├── file_filter.py
+│   │   │   ├── chunker.py
+│   │   │   ├── signals.py
+│   │   │   ├── import_graph.py
+│   │   │   ├── search_index.py
+│   │   │   ├── evidence.py
+│   │   │   ├── citations.py
+│   │   │   ├── llm.py
+│   │   │   ├── propose_features.py
+│   │   │   ├── write_pages.py
+│   │   │   └── pipeline.py
+│   │   └── util/
+│   │       ├── hashing.py
+│   │       └── text.py
+│   ├── tests/
+│   │   ├── fixtures/
+│   │   │   ├── sample_repo_small/
+│   │   │   └── github_api/
+│   │   ├── test_health.py
+│   │   ├── test_auth.py
+│   │   ├── test_file_filter.py
+│   │   ├── test_chunker.py
+│   │   ├── test_import_graph.py
+│   │   ├── test_signals.py
+│   │   ├── test_search_index.py
+│   │   ├── test_evidence.py
+│   │   ├── test_citations.py
+│   │   └── test_pipeline_smoke.py
+│   └── pytest.ini
 │
-├── package.json
-├── tsconfig.json
-├── tailwind.config.js
-└── .env.local                       # OPENAI_API_KEY
+├── frontend/
+│   ├── Dockerfile
+│   ├── .dockerignore
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── page.tsx
+│   │   │   ├── layout.tsx
+│   │   │   ├── api/
+│   │   │   │   ├── health/route.ts
+│   │   │   │   └── generate/route.ts
+│   │   │   └── wiki/
+│   │   │       └── [owner]/[repo]/page.tsx
+│   │   ├── components/
+│   │   │   ├── RepoForm.tsx
+│   │   │   ├── WikiViewer.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   └── Markdown.tsx
+│   │   └── lib/
+│   │       ├── api.ts
+│   │       └── types.ts
+│   ├── tests/
+│   │   ├── route-generate.test.ts
+│   │   └── ui-basic.test.tsx
+│   └── vitest.config.ts
+│
+└── .github/workflows/
+    ├── test.yml
+    ├── deploy-backend.yml
+    └── deploy-frontend.yml
 ```
 
 ---
 
-## Implementation Steps
+## Canonical API Contract
 
-Complete these steps IN ORDER. Each step has acceptance criteria that must pass before moving on.
+### Backend
 
-> **🛑 REMINDER:** After completing each step, STOP and report your progress using the template above. Wait for approval before continuing.
+* `GET /health`
 
----
+  * 200 JSON: `{ "status": "healthy" }`
 
-### STEP 1: Project Setup
+* `POST /api/generate`
 
-**Goal:** Initialize the project with all dependencies and configuration.
+  * Headers: `x-api-key: <API_KEY>`
+  * Body:
 
-**Tasks:**
-```bash
-# 1.1 Create Next.js project
-npx create-next-app@latest wiki-generator --typescript --tailwind --eslint --app --src-dir
+    ```json
+    { "repo_url": "https://github.com/owner/repo" }
+    ```
+  * Response:
 
-# 1.2 Install dependencies
-cd wiki-generator
-npm install openai react-markdown remark-gfm
-npm install -D @types/node
-
-# 1.3 Create .env.local (get API key from user)
-echo "OPENAI_API_KEY=<your-api-key>" > .env.local
-
-# 1.4 Initialize git and push to GitHub
-git init
-git add .
-git commit -m "Initial commit: Next.js project setup"
-git remote add origin <github-repo-url>  # Ask human for repo URL
-git push -u origin main
-
-# 1.5 Add this IMPLEMENTATION_GUIDE.md to the repo root
-cp /path/to/IMPLEMENTATION_GUIDE.md ./IMPLEMENTATION_GUIDE.md
-git add IMPLEMENTATION_GUIDE.md
-git commit -m "Add implementation guide"
-git push
-```
-
-**Note:** Ask the human for:
-- The OpenAI API key to put in `.env.local`
-- The GitHub repository URL for the project
-
-**Acceptance Criteria:**
-- [ ] `npm run dev` starts without errors
-- [ ] Can access `localhost:3000`
-- [ ] TypeScript compiles without errors
-- [ ] Git repo initialized and pushed to GitHub
-- [ ] IMPLEMENTATION_GUIDE.md is in the repo root
-
-> **🛑 CHECKPOINT:** Stop here. Report what you've set up, any issues encountered, and wait for approval before Step 2.
-
----
-
-### STEP 2: GitHub Repo Fetching
-
-**Goal:** Fetch repository contents via GitHub API (no auth needed for public repos).
-
-**File:** `src/lib/github/fetch-repo.ts`
-
-**Tasks:**
-
-2.1 Create types:
-```typescript
-// src/lib/github/types.ts
-export interface RepoFile {
-  path: string;
-  content: string;
-  size: number;
-  language: string | null;
-}
-
-export interface RepoMetadata {
-  owner: string;
-  repo: string;
-  defaultBranch: string;
-  commitSha: string;
-  description: string | null;
-}
-
-export interface FetchedRepo {
-  metadata: RepoMetadata;
-  files: RepoFile[];
-  readme: string | null;
-}
-```
-
-2.2 Implement fetcher:
-```typescript
-// src/lib/github/fetch-repo.ts
-// Use GitHub API: GET /repos/{owner}/{repo}/git/trees/{branch}?recursive=1
-// Then fetch individual file contents for relevant files
-// Filter OUT: node_modules, dist, build, .git, binaries, images, lockfiles
-// Filter IN: .ts, .tsx, .js, .jsx, .py, .go, .rs, .md, .json (config only)
-// Limit: Skip files > 100KB
-```
-
-2.3 Implement language detection:
-```typescript
-// Simple extension-based detection
-function detectLanguage(path: string): string | null {
-  const ext = path.split('.').pop();
-  const langMap: Record<string, string> = {
-    ts: 'typescript', tsx: 'typescript',
-    js: 'javascript', jsx: 'javascript',
-    py: 'python', go: 'go', rs: 'rust',
-    // ... etc
-  };
-  return langMap[ext || ''] || null;
-}
-```
-
-**Acceptance Criteria:**
-- [ ] Can fetch `https://github.com/tastejs/todomvc` structure
-- [ ] Returns file list with paths and content
-- [ ] Correctly filters out node_modules, binaries
-- [ ] Extracts README content
-- [ ] Returns commit SHA for stable links
-
-**Test:**
-```typescript
-const repo = await fetchRepo('tastejs', 'todomvc');
-console.log(repo.files.length); // Should be reasonable (not thousands)
-console.log(repo.readme?.substring(0, 100)); // Should have content
-console.log(repo.metadata.commitSha); // Should be 40-char hash
-```
-
-> **🛑 CHECKPOINT:** Stop here. This is a critical foundation step. Share your implementation approach, how you handled rate limits, and test results.
-
----
-
-### STEP 3: File Chunking
-
-**Goal:** Split files into semantic chunks with line number tracking.
-
-**File:** `src/lib/analysis/chunker.ts`
-
-**Types:**
-```typescript
-// src/lib/analysis/types.ts
-export interface CodeChunk {
-  id: string;              // e.g., "src/auth/login.ts:15-45"
-  filePath: string;
-  startLine: number;
-  endLine: number;
-  content: string;
-  language: string | null;
-}
-```
-
-**Implementation Strategy:**
-
-3.1 Try semantic chunking first (regex-based, not full AST):
-```typescript
-// For JS/TS: Split on function/class declarations
-const JS_CHUNK_PATTERNS = [
-  /^export\s+(default\s+)?(async\s+)?function\s+\w+/m,
-  /^export\s+(default\s+)?class\s+\w+/m,
-  /^(async\s+)?function\s+\w+/m,
-  /^class\s+\w+/m,
-  /^export\s+const\s+\w+\s*=/m,
-  /^const\s+\w+\s*=\s*(async\s+)?\(/m,  // arrow functions
-];
-```
-
-3.2 Fall back to line-based chunking:
-```typescript
-// If no patterns match, chunk by ~60 lines with 10 line overlap
-function chunkByLines(content: string, chunkSize = 60, overlap = 10): ChunkRange[]
-```
-
-3.3 Generate chunk IDs:
-```typescript
-function makeChunkId(filePath: string, startLine: number, endLine: number): string {
-  return `${filePath}:${startLine}-${endLine}`;
-}
-```
-
-**Acceptance Criteria:**
-- [ ] JavaScript files are split on function boundaries when possible
-- [ ] Each chunk has accurate line numbers
-- [ ] Chunk IDs are unique and parseable
-- [ ] No chunk exceeds 100 lines (soft limit)
-- [ ] All file content is covered (no gaps)
-
-**Test:**
-```typescript
-const chunks = chunkFile({
-  path: 'src/auth.ts',
-  content: `
-function login(user, pass) {
-  // 20 lines of code
-}
-
-function logout() {
-  // 15 lines of code
-}
-
-export class AuthService {
-  // 40 lines of code
-}
-`,
-  language: 'typescript'
-});
-
-// Should produce 3 chunks: login, logout, AuthService
-expect(chunks.length).toBe(3);
-expect(chunks[0].id).toMatch(/src\/auth\.ts:\d+-\d+/);
-```
-
----
-
-### STEP 4: Signal Extraction
-
-**Goal:** Identify entry points and user-facing surfaces WITHOUT using LLM.
-
-**File:** `src/lib/analysis/signals.ts`
-
-**Types:**
-```typescript
-export interface Signals {
-  // User-facing
-  readmeSections: { title: string; content: string }[];
-  cliCommands: { name: string; file: string }[];
-  apiRoutes: { method: string; path: string; file: string }[];
-  
-  // Backend
-  scheduledTasks: { name: string; file: string }[];
-  queueWorkers: { name: string; file: string }[];
-  
-  // Structure
-  entryPoints: { name: string; file: string }[];  // main, index, app
-  configFiles: string[];
-}
-```
-
-**Implementation:**
-
-4.1 Parse README sections:
-```typescript
-// Split README.md by ## headings
-// Extract sections: "Features", "Usage", "Commands", "API", "Installation"
-function parseReadmeSections(readme: string): { title: string; content: string }[]
-```
-
-4.2 Detect CLI commands:
-```typescript
-// Look for patterns in files:
-// - commander: .command('name')
-// - yargs: .command('name', ...)
-// - argparse: add_subparsers, add_parser('name')
-// - package.json "bin" field
-const CLI_PATTERNS = [
-  /\.command\(['"](\w+)['"]/g,
-  /program\.command\(['"]([^'"]+)['"]/g,
-];
-```
-
-4.3 Detect API routes:
-```typescript
-// Express: app.get('/path', ...), router.post('/path', ...)
-// Next.js: file path in app/api/ or pages/api/
-// FastAPI: @app.get("/path"), @router.post("/path")
-const ROUTE_PATTERNS = [
-  /\.(get|post|put|delete|patch)\(['"]([^'"]+)['"]/g,
-  /@(app|router)\.(get|post|put|delete)\(['"]([^'"]+)['"]/g,
-];
-```
-
-4.4 Detect backend tasks:
-```typescript
-// Cron: node-cron, @Scheduled, schedule.scheduleJob
-// Queues: Bull, BullMQ, Celery, Sidekiq patterns
-// File names: worker.ts, jobs/*.ts, tasks/*.py
-const BACKEND_PATTERNS = {
-  cron: [/cron\.schedule\(/, /@Scheduled/, /scheduleJob\(/],
-  queue: [/new Queue\(/, /Worker\(/, /@celery\.task/],
-};
-```
-
-4.5 Find entry points:
-```typescript
-// main.ts, index.ts, app.ts, server.ts, cli.ts
-// package.json "main" field
-// __main__.py, app.py, manage.py
-const ENTRY_POINT_NAMES = [
-  'main', 'index', 'app', 'server', 'cli', '__main__', 'manage'
-];
-```
-
-**Acceptance Criteria:**
-- [ ] Extracts README sections with titles
-- [ ] Finds CLI commands from commander/yargs/argparse
-- [ ] Finds API routes from Express/FastAPI patterns
-- [ ] Identifies entry point files
-- [ ] Works on at least JS/TS and Python files
-
-**Test:**
-```typescript
-const signals = extractSignals(repoFiles, readme);
-
-// For a CLI tool like rich-cli:
-expect(signals.cliCommands.length).toBeGreaterThan(0);
-
-// For an API like browser-use:
-expect(signals.entryPoints.length).toBeGreaterThan(0);
-```
-
-> **🛑 CHECKPOINT:** Stop here. Signal extraction is crucial for feature quality. Share what patterns you implemented and test results on a sample repo.
-
----
-
-### STEP 5: Import/Dependency Parsing
-
-**Goal:** Build a simple file-level dependency graph for evidence gathering.
-
-**File:** `src/lib/analysis/imports.ts`
-
-**Types:**
-```typescript
-export interface ImportGraph {
-  nodes: string[];  // file paths
-  edges: { from: string; to: string }[];
-}
-```
-
-**Implementation:**
-
-5.1 Parse imports:
-```typescript
-// JavaScript/TypeScript
-const JS_IMPORT_PATTERNS = [
-  /import\s+.*\s+from\s+['"]([^'"]+)['"]/g,
-  /require\(['"]([^'"]+)['"]\)/g,
-  /import\(['"]([^'"]+)['"]\)/g,  // dynamic import
-];
-
-// Python
-const PY_IMPORT_PATTERNS = [
-  /^import\s+([\w.]+)/gm,
-  /^from\s+([\w.]+)\s+import/gm,
-];
-```
-
-5.2 Resolve relative imports:
-```typescript
-// './utils' from 'src/auth/login.ts' -> 'src/auth/utils.ts' or 'src/auth/utils/index.ts'
-function resolveImport(importPath: string, fromFile: string, allFiles: string[]): string | null
-```
-
-5.3 Build graph:
-```typescript
-function buildImportGraph(files: RepoFile[]): ImportGraph
-```
-
-**Acceptance Criteria:**
-- [ ] Parses ES6 imports, CommonJS requires
-- [ ] Resolves relative imports to actual file paths
-- [ ] Ignores external packages (node_modules)
-- [ ] Returns valid graph structure
-
-**Test:**
-```typescript
-const graph = buildImportGraph(files);
-// If auth/login.ts imports auth/session.ts:
-expect(graph.edges).toContainEqual({
-  from: 'src/auth/login.ts',
-  to: 'src/auth/session.ts'
-});
-```
-
----
-
-### STEP 6: OpenAI Client Setup
-
-**Goal:** Configure OpenAI client with proper error handling.
-
-**File:** `src/lib/ai/openai.ts`
-
-```typescript
-import OpenAI from 'openai';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-export async function complete(
-  systemPrompt: string,
-  userPrompt: string,
-  options?: { temperature?: number; maxTokens?: number }
-): Promise<string> {
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    temperature: options?.temperature ?? 0.3,
-    max_tokens: options?.maxTokens ?? 2000,
-  });
-  
-  return response.choices[0]?.message?.content || '';
-}
-
-export async function completeJSON<T>(
-  systemPrompt: string,
-  userPrompt: string
-): Promise<T> {
-  const response = await complete(
-    systemPrompt + '\n\nRespond with valid JSON only. No markdown, no explanation.',
-    userPrompt,
-    { temperature: 0.2 }
-  );
-  
-  // Strip markdown code blocks if present
-  const cleaned = response.replace(/```json\n?|\n?```/g, '').trim();
-  return JSON.parse(cleaned) as T;
-}
-```
-
-**Acceptance Criteria:**
-- [ ] Can make successful API calls
-- [ ] Handles JSON responses
-- [ ] Proper error handling for rate limits/failures
-
----
-
-### STEP 7: Feature Proposal (LLM)
-
-**Goal:** Use LLM to propose user-facing features based on signals.
-
-**File:** `src/lib/ai/propose-features.ts`
-
-**Types:**
-```typescript
-export interface ProposedFeature {
-  id: string;           // slug: "user-authentication"
-  title: string;        // "User Authentication"
-  description: string;  // 1-2 sentence summary
-  userStory: string;    // "As a user, I can..."
-  entryPoints: string[];  // file paths that start this feature
-  keywords: string[];   // for evidence search
-}
-
-export interface FeatureProposal {
-  repoSummary: string;  // What this repo does
-  features: ProposedFeature[];
-}
-```
-
-**Prompt:**
-```typescript
-const SYSTEM_PROMPT = `You are a senior software architect analyzing a codebase to create developer documentation.
-
-Your task is to identify USER-FACING FEATURES, not technical layers.
-
-BAD groupings (avoid these):
-- "Frontend", "Backend", "API", "Utils", "Helpers", "Components"
-
-GOOD groupings (aim for these):
-- "User Authentication" (login, signup, sessions)
-- "Document Export" (PDF generation, sharing)
-- "Search & Filtering" (query builder, facets)
-- "Background Jobs" (email sending, data sync)
-
-Each feature should represent something a USER or DEVELOPER can DO with the software.`;
-
-const USER_PROMPT = `
-# Repository: {repoName}
-
-## Description
-{repoDescription}
-
-## README Sections
-{readmeSections}
-
-## Entry Points Found
-{entryPoints}
-
-## CLI Commands
-{cliCommands}
-
-## API Routes
-{apiRoutes}
-
-## File Structure (top-level)
-{fileTree}
-
----
-
-Based on this analysis, propose 5-9 user-facing features for this codebase.
-
-Respond in JSON:
-{
-  "repoSummary": "One paragraph describing what this software does",
-  "features": [
+    ```json
     {
-      "id": "feature-slug",
-      "title": "Feature Title",
-      "description": "What this feature does",
-      "userStory": "As a [user type], I can [action] so that [benefit]",
-      "entryPoints": ["src/path/to/entry.ts"],
-      "keywords": ["relevant", "search", "terms"]
+      "repo_id": "owner/repo",
+      "commit_sha": "<sha>",
+      "overview_md": "...",
+      "features": [
+        {
+          "id": "feature-slug",
+          "title": "...",
+          "description": "...",
+          "content_md": "... markdown with citations ..."
+        }
+      ]
     }
-  ]
-}
-`;
-```
+    ```
 
-**Acceptance Criteria:**
-- [ ] Returns 5-9 features for typical repos
-- [ ] Features are user-facing, not technical layers
-- [ ] Each feature has entry points mapped to real files
-- [ ] JSON parses correctly
+### Frontend
 
-**Test:**
-```typescript
-const proposal = await proposeFeatures(signals, fileTree);
-expect(proposal.features.length).toBeGreaterThanOrEqual(3);
-expect(proposal.features[0].entryPoints.length).toBeGreaterThan(0);
-// Should NOT have features named "Utils", "Helpers", "Components"
-proposal.features.forEach(f => {
-  expect(f.title.toLowerCase()).not.toMatch(/util|helper|component|frontend|backend/);
-});
-```
+* `GET /api/health` → proxies to `${BACKEND_URL}/health`
+* `POST /api/generate` → proxies to `${BACKEND_URL}/api/generate`.
 
-> **🛑 CHECKPOINT:** Stop here. This is the first LLM integration. Share the exact prompt you used, sample output, and whether features are truly user-facing.
+   - Frontend should forward an app-specific API key in the `x-api-key` header (this is an application-level key used to authenticate frontend→backend requests, not the OpenAI key).
+   - The backend must validate the app `x-api-key` and then use `OPENAI_API_KEY` from its environment for LLM calls. Do NOT expose `OPENAI_API_KEY` to the client.
+
+## Citations (Verification)
+
+- All inline citations must be deterministic and point to the analyzed `commit_sha` using GitHub blob URLs with line anchors (for example: `https://github.com/owner/repo/blob/<commit_sha>/path/to/file.py#L10-L20`).
+- Add a small verification test that asserts generated markdown contains at least one citation matching the returned `commit_sha`.
+- Store the `commit_sha` returned by the repo snapshot step and use it for all citation links so links remain stable and auditable.
 
 ---
 
-### STEP 8: Evidence Gathering
+# Implementation Steps (Atomic, Test-Driven)
 
-**Goal:** For each feature, collect relevant code chunks using entry points + import graph.
-
-**File:** `src/lib/wiki/evidence.ts`
-
-**Types:**
-```typescript
-export interface FeatureEvidence {
-  featureId: string;
-  chunks: CodeChunk[];
-  filesCovered: string[];
-}
-```
-
-**Implementation:**
-
-8.1 Seed from entry points:
-```typescript
-function getEntryPointChunks(
-  feature: ProposedFeature,
-  allChunks: CodeChunk[]
-): CodeChunk[]
-```
-
-8.2 Expand via imports (bounded):
-```typescript
-function expandByImports(
-  seedFiles: string[],
-  graph: ImportGraph,
-  allChunks: CodeChunk[],
-  maxHops: number = 2,
-  maxChunks: number = 30
-): CodeChunk[]
-```
-
-8.3 Add keyword matches:
-```typescript
-function findByKeywords(
-  keywords: string[],
-  allChunks: CodeChunk[],
-  limit: number = 10
-): CodeChunk[]
-```
-
-8.4 Combine and dedupe:
-```typescript
-export function gatherEvidence(
-  feature: ProposedFeature,
-  allChunks: CodeChunk[],
-  graph: ImportGraph
-): FeatureEvidence {
-  const seedChunks = getEntryPointChunks(feature, allChunks);
-  const seedFiles = [...new Set(seedChunks.map(c => c.filePath))];
-  
-  const expandedChunks = expandByImports(seedFiles, graph, allChunks, 2, 30);
-  const keywordChunks = findByKeywords(feature.keywords, allChunks, 10);
-  
-  // Combine, dedupe, limit to 40 chunks max
-  const allEvidence = dedupeChunks([...seedChunks, ...expandedChunks, ...keywordChunks]);
-  return {
-    featureId: feature.id,
-    chunks: allEvidence.slice(0, 40),
-    filesCovered: [...new Set(allEvidence.map(c => c.filePath))],
-  };
-}
-```
-
-**Acceptance Criteria:**
-- [ ] Returns chunks for each feature
-- [ ] Respects max chunk limits
-- [ ] Includes entry point chunks
-- [ ] Expands to imported files
-- [ ] No duplicate chunks
+> Each step ends with: tests pass → approval → commit → deploy → smoke checks.
 
 ---
 
-### STEP 9: Wiki Page Generation (LLM)
+## STEP 1: Repo Hygiene + Docker Context Control
 
-**Goal:** Generate markdown documentation for each feature with inline citations.
+### Tasks
 
-**File:** `src/lib/ai/generate-page.ts`
+1. Ensure root `.gitignore` contains:
 
-**Prompt:**
-```typescript
-const SYSTEM_PROMPT = `You are a technical writer creating developer documentation.
+   * `node_modules/`, `.next/`, `dist/`, `build/`
+   * `.venv/`, `venv/`, `__pycache__/`, `*.pyc`, `.pytest_cache/`
+   * `.env`, `.env.*`, `*.env`
+   * `gcp-key.json`
 
-Write clear, accurate documentation with INLINE CITATIONS to source code.
+2. Create/verify `frontend/.dockerignore`:
 
-Citation format: [filename:startLine-endLine]
-Example: "The login flow begins in [src/auth/login.ts:45-67] which validates credentials..."
+   * `node_modules`
+   * `.next`
+   * `.git`
+   * `.env*`
 
-EVERY technical claim must have a citation. If you can't cite it, don't say it.
+3. Create/verify `backend/.dockerignore`:
 
-Structure your documentation with:
-1. Overview (what this feature does, who it's for)
-2. How it works (step-by-step flow with citations)
-3. Key components (important functions/classes with citations)
-4. Usage examples (if evident from code)`;
+   * `.venv`
+   * `__pycache__`
+   * `.pytest_cache`
+   * `.env*`
+   * `.git`
 
-const USER_PROMPT = `
-# Feature: {featureTitle}
+4. Verify `frontend/node_modules` not tracked:
 
-## Description
-{featureDescription}
+   ```bash
+   git ls-files frontend/node_modules | head
+   ```
 
-## User Story
-{userStory}
+### Acceptance Criteria
 
-## Source Code Evidence
+* [ ] `git status` shows no accidental artifacts
+* [ ] Docker build context does not include `node_modules` or `.venv`
 
-{chunks.map(chunk => `
-### [{chunk.id}]
-\`\`\`{chunk.language}
-{chunk.content}
-\`\`\`
-`).join('\n')}
+### Validation
 
----
-
-Write comprehensive documentation for this feature.
-Use [chunkId] citations for every technical claim.
-`;
-```
-
-**Post-processing:**
-```typescript
-// src/lib/wiki/citations.ts
-
-export function processCitations(
-  markdown: string,
-  chunks: CodeChunk[],
-  repoMeta: RepoMetadata
-): string {
-  // Match [filepath:start-end] patterns
-  const citationRegex = /\[([^\]]+):(\d+)-(\d+)\]/g;
-  
-  return markdown.replace(citationRegex, (match, filePath, start, end) => {
-    // Build GitHub permalink
-    const url = `https://github.com/${repoMeta.owner}/${repoMeta.repo}/blob/${repoMeta.commitSha}/${filePath}#L${start}-L${end}`;
-    const shortName = filePath.split('/').pop();
-    return `[\`${shortName}:${start}-${end}\`](${url})`;
-  });
-}
-```
-
-**Acceptance Criteria:**
-- [ ] Generates readable markdown
-- [ ] Includes citations in [file:line-line] format
-- [ ] Citations are converted to GitHub links
-- [ ] All sections present (overview, how it works, components)
-- [ ] No hallucinated file paths
-
-**Test:**
-```typescript
-const page = await generatePage(feature, evidence, repoMeta);
-// Should contain citations
-expect(page).toMatch(/\[`[\w.]+:\d+-\d+`\]\(https:\/\/github\.com/);
-// Should have sections
-expect(page).toMatch(/## Overview|## How it works/i);
-```
-
-> **🛑 CHECKPOINT:** Stop here. This is the core output. Share a sample generated page, verify citations are accurate, and get feedback on quality.
+* `git status --porcelain`
 
 ---
 
-### STEP 10: In-Memory Wiki Store
+## STEP 2: Backend – Local Venv + Requirements + Pytest Harness
 
-**Goal:** Store generated wikis for serving (no database needed for MVP).
+### Tasks
 
-**File:** `src/lib/store/wiki-store.ts`
+1. Create venv (must be used always):
 
-```typescript
-export interface GeneratedWiki {
-  repoId: string;          // "owner/repo"
-  metadata: RepoMetadata;
-  summary: string;
-  features: {
-    id: string;
-    title: string;
-    description: string;
-    content: string;       // processed markdown
-  }[];
-  generatedAt: Date;
-}
+   ```bash
+   cd backend
+   python3 -m venv .venv
+   source .venv/bin/activate
+   python -m pip install --upgrade pip
+   ```
 
-// Simple in-memory store (resets on deploy, fine for MVP)
-const wikiStore = new Map<string, GeneratedWiki>();
+2. Add `requirements.txt` (runtime) and `requirements-dev.txt` (dev/testing).
 
-export function saveWiki(wiki: GeneratedWiki): void {
-  wikiStore.set(wiki.repoId, wiki);
-}
+3. Add `pytest.ini` with:
 
-export function getWiki(repoId: string): GeneratedWiki | null {
-  return wikiStore.get(repoId) || null;
-}
+   * `testpaths = tests`
+   * `pythonpath = src`
 
-export function listWikis(): string[] {
-  return Array.from(wikiStore.keys());
-}
-```
+4. Add minimal `src/main.py` FastAPI app (if current differs, refactor) that wires routers.
 
----
+5. Add minimal tests:
 
-### STEP 11: API Route - Generate Wiki
+   * `tests/test_health.py` expects `/health` 200
 
-**Goal:** Create endpoint that orchestrates the full pipeline.
+### Acceptance Criteria
 
-**File:** `src/app/api/generate/route.ts`
+* [ ] `pytest -q` passes in venv
+* [ ] `uvicorn src.main:app --reload --port 8080` runs locally
 
-```typescript
-import { NextRequest, NextResponse } from 'next/server';
+### Tests
 
-export async function POST(request: NextRequest) {
-  const { repoUrl } = await request.json();
-  
-  // 1. Parse repo URL
-  const { owner, repo } = parseGitHubUrl(repoUrl);
-  
-  // 2. Check if already generated
-  const existing = getWiki(`${owner}/${repo}`);
-  if (existing) {
-    return NextResponse.json({ wiki: existing, cached: true });
-  }
-  
-  // 3. Fetch repo
-  const fetchedRepo = await fetchRepo(owner, repo);
-  
-  // 4. Chunk files
-  const chunks = fetchedRepo.files.flatMap(f => chunkFile(f));
-  
-  // 5. Extract signals
-  const signals = extractSignals(fetchedRepo.files, fetchedRepo.readme);
-  
-  // 6. Build import graph
-  const graph = buildImportGraph(fetchedRepo.files);
-  
-  // 7. Propose features (LLM)
-  const proposal = await proposeFeatures(signals, fetchedRepo);
-  
-  // 8. For each feature: gather evidence + generate page
-  const features = await Promise.all(
-    proposal.features.map(async (feature) => {
-      const evidence = gatherEvidence(feature, chunks, graph);
-      const rawContent = await generatePage(feature, evidence, fetchedRepo.metadata);
-      const content = processcitations(rawContent, chunks, fetchedRepo.metadata);
-      
-      return {
-        id: feature.id,
-        title: feature.title,
-        description: feature.description,
-        content,
-      };
-    })
-  );
-  
-  // 9. Save and return
-  const wiki: GeneratedWiki = {
-    repoId: `${owner}/${repo}`,
-    metadata: fetchedRepo.metadata,
-    summary: proposal.repoSummary,
-    features,
-    generatedAt: new Date(),
-  };
-  
-  saveWiki(wiki);
-  
-  return NextResponse.json({ wiki, cached: false });
-}
-```
-
-**Acceptance Criteria:**
-- [ ] Accepts GitHub URL in POST body
-- [ ] Returns complete wiki structure
-- [ ] Handles errors gracefully
-- [ ] Caches results to avoid re-generation
-
-> **🛑 CHECKPOINT:** Stop here. The full pipeline is now connected. Test end-to-end with a real repo and share results before building UI.
-
----
-
-### STEP 12: Frontend - Home Page
-
-**Goal:** Simple form to input GitHub repo URL.
-
-**File:** `src/app/page.tsx`
-
-**Requirements:**
-- Input field for GitHub URL
-- "Generate Wiki" button
-- Loading state during generation
-- Error handling
-- Redirect to wiki on success
-
-**UI Sketch:**
-```
-┌─────────────────────────────────────────────┐
-│                                             │
-│         📚 GitHub Wiki Generator            │
-│                                             │
-│   Generate documentation for any public     │
-│   GitHub repository                         │
-│                                             │
-│   ┌─────────────────────────────────────┐   │
-│   │ https://github.com/owner/repo       │   │
-│   └─────────────────────────────────────┘   │
-│                                             │
-│          [ Generate Wiki ]                  │
-│                                             │
-│   Example repos to try:                     │
-│   • tastejs/todomvc                         │
-│   • Textualize/rich-cli                     │
-│   • browser-use/browser-use                 │
-│                                             │
-└─────────────────────────────────────────────┘
-```
-
----
-
-### STEP 13: Frontend - Wiki Layout
-
-**Goal:** Display generated wiki with sidebar navigation.
-
-**Files:**
-- `src/app/wiki/[owner]/[repo]/layout.tsx` - Sidebar layout
-- `src/app/wiki/[owner]/[repo]/page.tsx` - Wiki home/overview
-- `src/app/wiki/[owner]/[repo]/[feature]/page.tsx` - Feature page
-
-**Layout Structure:**
-```
-┌──────────────────┬──────────────────────────────────────┐
-│                  │                                      │
-│  📚 repo-name    │   Feature Title                      │
-│                  │                                      │
-│  Overview        │   ## Overview                        │
-│                  │   Description text with citations    │
-│  Features        │   that link to GitHub source.        │
-│  ├─ Auth         │                                      │
-│  ├─ API          │   ## How it works                    │
-│  ├─ CLI          │   Step-by-step explanation...        │
-│  └─ Export       │                                      │
-│                  │   ## Key Components                  │
-│  ──────────────  │   - `function` - description         │
-│  🔍 Search       │                                      │
-│                  │                                      │
-└──────────────────┴──────────────────────────────────────┘
-```
-
-**Components Needed:**
-
-```typescript
-// src/components/WikiSidebar.tsx
-// - Repo name + link
-// - "Overview" link
-// - List of features (active state)
-// - Optional search input
-
-// src/components/WikiPage.tsx
-// - Render markdown with react-markdown
-// - Style code blocks
-// - Style citation links (highlight on hover)
-
-// src/components/CitationLink.tsx
-// - Styled link to GitHub
-// - Shows file:lines on hover
-// - Opens in new tab
-```
-
-**Acceptance Criteria:**
-- [ ] Sidebar shows all features
-- [ ] Active feature is highlighted
-- [ ] Markdown renders correctly
-- [ ] Code blocks have syntax highlighting
-- [ ] Citation links work and go to GitHub
-- [ ] Responsive on mobile
-
-> **🛑 CHECKPOINT:** Stop here. Share screenshots of the UI, get feedback on layout/styling before adding loading states.
-
----
-
-### STEP 14: Loading & Error States
-
-**Goal:** Good UX during generation (which takes 30-60 seconds).
-
-**Requirements:**
-- Show progress steps during generation
-- Handle API errors gracefully
-- Allow retry on failure
-
-**Loading UI:**
-```
-┌─────────────────────────────────────────────┐
-│                                             │
-│   Generating wiki for owner/repo...         │
-│                                             │
-│   ✓ Fetching repository                     │
-│   ✓ Analyzing code structure                │
-│   ⏳ Identifying features...                │
-│   ○ Generating documentation                │
-│   ○ Processing citations                    │
-│                                             │
-│   This may take 30-60 seconds               │
-│                                             │
-└─────────────────────────────────────────────┘
-```
-
----
-
-### STEP 15: Deploy to Vercel
-
-**Goal:** Get publicly accessible URL.
-
-**Tasks:**
 ```bash
-# 15.1 Push to GitHub
-git init
-git add .
-git commit -m "Initial commit: GitHub Wiki Generator"
-git remote add origin https://github.com/YOUR_USERNAME/wiki-generator.git
-git push -u origin main
-
-# 15.2 Deploy to Vercel
-# - Go to vercel.com
-# - Import your GitHub repo
-# - Add environment variable: OPENAI_API_KEY
-# - Deploy
+cd backend
+source .venv/bin/activate
+pytest -q
 ```
 
-**Acceptance Criteria:**
-- [ ] App accessible at `your-app.vercel.app`
-- [ ] Can generate wiki for `tastejs/todomvc`
-- [ ] Wiki displays correctly
-- [ ] Citations link to correct GitHub lines
+---
 
-> **🛑 FINAL CHECKPOINT:** Stop here. Share the deployed URL, run through the full testing checklist together, and discuss any final polish needed.
+## STEP 3: Backend – Config + Auth Middleware (API_KEY)
+
+### Tasks
+
+1. Implement `src/config.py`:
+
+   * reads `API_KEY` (app key for frontend→backend auth) and `OPENAI_API_KEY` (kept server-side only)
+   * safe defaults for local dev
+
+2. Add auth helper:
+
+   * function `require_api_key(x_api_key: str | None) -> None`
+   * raise `HTTPException(401)` on missing/invalid
+
+3. Apply auth to protected routes (at minimum `/api/generate`).
+
+4. Add tests:
+
+   * missing key → 401
+   * wrong key → 401
+   * correct key → 200 (for stub response)
+
+### Acceptance Criteria
+
+* [ ] Auth enforced only where intended
+* [ ] Error response is JSON and stable
+
+### Tests
+
+```bash
+pytest -q
+```
 
 ---
 
-## Testing Checklist
+## STEP 4: Backend – Canonical Schemas + Response Contract
 
-Run these tests before considering the project complete:
+### Tasks
 
-### Functional Tests
+1. Create `src/models/schemas.py` with pydantic models:
 
-| Test | Steps | Expected |
-|------|-------|----------|
-| Basic generation | Enter `https://github.com/tastejs/todomvc`, click Generate | Wiki generated with 3+ features |
-| Citation links | Click any citation in generated wiki | Opens GitHub at correct file and lines |
-| Feature navigation | Click different features in sidebar | Content changes, URL updates |
-| Cached results | Generate same repo twice | Second time is instant |
-| Invalid URL | Enter `https://github.com/nonexistent/repo` | Shows error message |
+   * `GenerateRequest(repo_url: HttpUrl)`
+   * `WikiFeature(id, title, description, content_md)`
+   * `GenerateResponse(repo_id, commit_sha, overview_md, features)`
 
-### Quality Tests
+2. Update router to use models and return stubbed deterministic response.
 
-| Test | Check |
-|------|-------|
-| Features are user-facing | No features named "Utils", "Helpers", "Components" |
-| Citations are accurate | At least 3 citations per page link to real code |
-| Content is useful | Overview explains what feature does, not just lists files |
-| No hallucinations | Every cited file exists in the repo |
+3. Add contract tests:
 
-### Repos to Test
+   * `POST /api/generate` returns JSON matching schema
+   * Validate `repo_id` parsing is correct for GitHub URLs
 
-1. `tastejs/todomvc` - Multi-framework examples
-2. `Textualize/rich-cli` - Python CLI tool  
-3. `browser-use/browser-use` - Python library
+### Acceptance Criteria
+
+* [ ] Schema is the one used end-to-end (frontend relies on this)
+
+### Tests
+
+```bash
+pytest -q
+```
 
 ---
 
-## Known Limitations (Document in Reflection)
+## STEP 5: Backend – GitHub Repo Snapshot (Tree + Files)
 
-1. **No persistent storage** - Wikis are lost on redeploy
-2. **Rate limits** - GitHub API (60/hr unauthenticated), OpenAI
-3. **Large repos** - May timeout or hit token limits
-4. **Dynamic imports** - Not traced in dependency graph
-5. **Non-JS/Python** - Limited signal detection for other languages
-6. **Private repos** - Not supported (no auth)
-7. **Monorepos** - May produce too many features
+### Goal
 
----
+Create a reproducible `RepoSnapshot` object:
 
-## Extension Ideas (Bonus, Time Permitting)
+* metadata (owner/repo, default_branch)
+* commit SHA
+* file list (path, size, type)
+* file contents for selected files
 
-1. **Q&A Chat** - Ask questions about the wiki
-2. **Search** - Full-text search across pages
-3. **Export** - Download wiki as markdown/PDF
-4. **Refresh** - Re-generate when repo updates
-5. **Diff view** - Show what changed between generations
+### Tasks
 
----
+1. Implement `services/github_client.py`:
 
-## File-by-File Implementation Order
+   * `get_repo(owner, repo)`
+   * `get_branch_sha(owner, repo, branch)`
+   * `get_tree(owner, repo, sha)` (recursive)
+   * `get_file(owner, repo, path, ref_sha)`
 
-For maximum efficiency, implement in this order. **Remember: Stop after each STEP (not each file) for review.**
+2. Implement `services/file_filter.py`:
 
-| Step | Files | Checkpoint? | Status |
-|------|-------|-------------|--------|
-| 1 | Project setup | ✅ Yes | ⬜ Pending |
-| 2 | `types.ts`, `fetch-repo.ts` | ✅ Yes | ⬜ Pending |
-| 3 | `types.ts`, `chunker.ts` | Yes | ⬜ Pending |
-| 4 | `signals.ts` | ✅ Yes | ⬜ Pending |
-| 5 | `imports.ts` | Yes | ⬜ Pending |
-| 6 | `openai.ts` | Yes | ⬜ Pending |
-| 7 | `propose-features.ts` | ✅ Yes | ⬜ Pending |
-| 8 | `evidence.ts` | Yes | ⬜ Pending |
-| 9 | `generate-page.ts`, `citations.ts` | ✅ Yes | ⬜ Pending |
-| 10 | `wiki-store.ts` | Yes | ⬜ Pending |
-| 11 | `api/generate/route.ts` | ✅ Yes | ⬜ Pending |
-| 12 | `page.tsx` (home) | Yes | ⬜ Pending |
-| 13 | Components + wiki pages | ✅ Yes | ⬜ Pending |
-| 14 | Loading states | Yes | ⬜ Pending |
-| 15 | Deploy | ✅ Yes | ⬜ Pending |
+   * `should_include(path, size_bytes, is_binary_guess) -> bool`
+   * rules:
 
-**Status Legend:**
-- ⬜ Pending — Not started
-- 🔄 In Progress — Currently working on
-- ✅ Completed — Approved and committed
+     * exclude directories: `node_modules/`, `.git/`, `dist/`, `build/`, `.next/`, `venv/`, `.venv/`
+     * exclude binaries by extension (`.png`, `.jpg`, `.pdf`, `.zip`, `.exe`, etc.)
+     * exclude very large files (default 100KB)
+     * include: `.md`, `.py`, `.ts`, `.tsx`, `.js`, `.json` (selectively), `.yaml/.yml`, `.toml`, `.graphql`, `.sql`, etc.
 
----
+3. Implement `services/repo_loader.py`:
 
-## Quick Reference: Key Decisions
+   * builds snapshot:
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Chunking strategy | Semantic (regex) with line fallback | Better chunks without AST complexity |
-| Feature discovery | Signals-first (no code clustering) | More accurate user-facing features |
-| Evidence gathering | Entry points + 2-hop imports + keywords | Bounded, relevant |
-| Citation format | `[file:start-end]` → GitHub permalink | Simple, verifiable |
-| Storage | In-memory Map | Fast for MVP, no DB setup |
-| Styling | Tailwind | Fast iteration |
+     * selects candidate files via filter
+     * downloads contents
+     * keeps README if present
+
+4. Add fixtures + tests using `respx` mocking GitHub API responses.
+
+### Intermediate artifacts (write to disk in tests)
+
+* `tests/fixtures/github_api/` JSON responses
+* optional: store a small repo snapshot JSON for debugging
+
+### Acceptance Criteria
+
+* [ ] Snapshot contains commit SHA
+* [ ] README captured if present
+* [ ] Filtering prevents big/binary noise
+
+### Tests
+
+```bash
+pytest -q
+```
 
 ---
 
-Good luck! Work through the steps in order, test each one, and you'll have a working wiki generator.
+## STEP 6: Backend – Chunking (Line-numbered Chunks)
+
+### Goal
+
+Convert each included file into chunks with stable IDs and line ranges.
+
+### Tasks
+
+1. Implement `services/chunker.py`:
+
+   * input: `path`, `content`
+   * output: list of chunks:
+
+     * `chunk_id = f"{path}:{start}-{end}"`
+     * `start_line`, `end_line`
+     * `text`
+   * strategies:
+
+     * attempt simple semantic splits for:
+
+       * Python: `def`, `class`
+       * JS/TS: `function`, `class`, `export`, `const X = (` patterns
+     * fallback sliding window:
+
+       * 60 lines, 10 line overlap
+
+2. Tests:
+
+   * full coverage (no missing lines)
+   * stable IDs
+   * chunk max lines not exceeded
+
+### Acceptance Criteria
+
+* [ ] Deterministic chunk boundaries
+* [ ] IDs usable for citations
+
+### Tests
+
+```bash
+pytest -q
+```
 
 ---
 
-## Final Reminder
+## STEP 7: Backend – Signals Extraction (No LLM)
 
-**This is a collaborative project.** Your human partner wants to:
-- Understand your decisions
-- Catch issues early
-- Learn from your approach
-- Provide course corrections
+### Goal
 
-**Never proceed without approval.** When in doubt, ask. It's better to over-communicate than to build the wrong thing.
+Extract *non-LLM* signals that guide feature discovery:
 
-Start with Step 1, complete it, report back, and wait for the green light. Let's build this together! 🚀
+* README headings
+* routes/endpoints
+* entry points
+* CLI scripts
+* config hints
+
+### Tasks
+
+1. Implement `services/signals.py`:
+
+   * `extract_readme_signals(readme_md)`
+   * `extract_route_signals(files)` (regex: FastAPI, Express, Next, etc.)
+   * `extract_entrypoints(files)` (package.json scripts, main modules)
+
+2. Tests with fixture files.
+
+### Acceptance Criteria
+
+* [ ] Signals are deterministic
+
+---
+
+## STEP 8: Backend – File-level Import Graph
+
+### Goal
+
+Create file-to-file dependency graph for evidence expansion.
+
+### Tasks
+
+1. Implement `services/import_graph.py`:
+
+   * parse imports:
+
+     * Python: `import x`, `from x import y`
+     * JS/TS: `import ... from`, `require()`
+   * resolve relative imports to repo paths
+   * ignore external packages
+
+2. Add tests with small fixture repo files.
+
+### Acceptance Criteria
+
+* [ ] Graph edges are correct for fixtures
+
+---
+
+## STEP 9: Backend – Search Index Over Chunks
+
+### Goal
+
+Enable keyword + lightweight semantic retrieval without heavy infra.
+
+### Tasks
+
+1. Implement `services/search_index.py`:
+
+   * store `chunk_id → text`
+   * provide search:
+
+     * keyword scoring (BM25-like simple) or TF-IDF
+     * fall back to substring matching
+
+2. Tests:
+
+   * searching “login” returns chunks containing login
+   * top-k works
+
+### Acceptance Criteria
+
+* [ ] Deterministic results
+
+---
+
+## STEP 10: Backend – LLM Client (Robust JSON)
+
+### Goal
+
+All OpenAI interaction goes through `services/llm.py`.
+
+### Tasks
+
+1. Implement `services/llm.py`:
+
+   * `chat_text(system, user, model, temperature)`
+   * `chat_json(system, user, schema_hint)` that:
+
+     * enforces JSON-only output
+     * strips code fences
+     * validates via pydantic schema in `models/llm_schemas.py`
+   * retries (2) on transient errors
+
+2. Add `models/llm_schemas.py` for LLM outputs:
+
+   * `FeatureProposalList`
+   * `EvidenceSelection`
+   * `WikiPageDraft`
+
+3. Tests:
+
+   * JSON cleaner handles fenced outputs
+
+### Acceptance Criteria
+
+* [ ] LLM interface returns validated structures
+
+---
+
+## STEP 11: Backend – Feature Proposals (LLM)
+
+### Goal
+
+Generate 5–9 **user-facing** features with entry points.
+
+### Inputs
+
+* repo metadata
+* README signals
+* route signals
+* file list summary
+
+### Tasks
+
+1. Implement `services/propose_features.py` using `llm.chat_json`.
+
+2. Enforce constraints:
+
+   * titles must be user-facing
+   * no “utils/helpers/components/frontend/backend”
+   * each feature includes:
+
+     * `id` (slug)
+     * `title`
+     * `description`
+     * `seed_paths` (file paths likely relevant)
+
+3. Add tests:
+
+   * schema valid
+   * banned words not present
+
+### Acceptance Criteria
+
+* [ ] Reasonable features for fixture repo
+
+---
+
+## STEP 12: Backend – Evidence Gathering (Deterministic + Bounded)
+
+### Goal
+
+For each feature, assemble evidence chunks for page writing.
+
+### Tasks
+
+1. Implement `services/evidence.py`:
+
+   * Start from `seed_paths` → include all chunks from those files
+   * Expand via import graph up to `max_hops=2`
+   * Add search hits from index using feature keywords
+   * Deduplicate chunks
+   * Enforce bounds:
+
+     * max chunks per feature (e.g., 40)
+     * max total text chars (e.g., 80k)
+
+2. Tests:
+
+   * respects bounds
+   * includes seed chunks
+
+### Acceptance Criteria
+
+* [ ] Each feature has evidence pack
+
+---
+
+## STEP 13: Backend – Page Writing (LLM) With Chunk Citations
+
+### Goal
+
+Generate markdown per feature with citations.
+
+### Citation format (internal)
+
+LLM must cite as:
+
+* `[path:start-end]` matching chunk IDs
+
+### Tasks
+
+1. Implement `services/write_pages.py`:
+
+   * prompt includes:
+
+     * feature title + description
+     * evidence chunks (with IDs)
+     * instruction: cite every nontrivial claim
+     * output markdown only
+
+2. Implement `services/citations.py`:
+
+   * convert `[path:start-end]` → markdown link to GitHub permalink:
+
+     * `https://github.com/{owner}/{repo}/blob/{sha}/{path}#L{start}-L{end}`
+
+3. Tests:
+
+   * citations convert correctly
+   * invalid citations are either removed or flagged
+
+### Acceptance Criteria
+
+* [ ] Markdown contains citations
+* [ ] Links resolve to GitHub blob URLs
+
+---
+
+## STEP 14: Backend – Overview Page (LLM)
+
+### Goal
+
+Generate a repo-level overview with citations:
+
+* what it does
+* architecture at a high level
+* how to run
+
+### Tasks
+
+* Implement `services/wiki_writer.py` or a function in `write_pages.py`
+* Use a smaller evidence set:
+
+  * README
+  * package.json/pyproject
+  * main entrypoints
+
+### Acceptance Criteria
+
+* [ ] overview_md returned
+
+---
+
+## STEP 15: Backend – Pipeline Orchestrator
+
+### Goal
+
+One function that runs the full pipeline with stable intermediate artifacts.
+
+### Tasks
+
+1. Implement `services/pipeline.py`:
+
+   * `run_pipeline(repo_url: str) -> GenerateResponse`
+
+2. Persist intermediate artifacts **optionally** (debug mode):
+
+   * snapshot summary JSON
+   * chunk index stats
+   * proposed features JSON
+   * evidence packs stats
+
+3. Add a smoke test (no real OpenAI call) that stubs LLM:
+
+   * patch `llm.chat_json` and `llm.chat_text`
+   * assert pipeline returns GenerateResponse
+
+### Acceptance Criteria
+
+* [ ] Pipeline runs deterministically with mocked LLM
+
+---
+
+## STEP 16: Backend – `/api/generate` Endpoint
+
+### Tasks
+
+* Implement router `routers/generate.py`:
+
+  * parse input
+  * auth
+  * call pipeline
+  * return response
+
+### Tests
+
+* contract tests
+* auth tests
+
+### Acceptance Criteria
+
+* [ ] Endpoint works locally
+
+---
+
+## STEP 17: Frontend – Proxy `/api/generate` Route
+
+### Tasks
+
+1. Implement `frontend/src/app/api/generate/route.ts`:
+
+   * validates request JSON
+   * forwards to `${BACKEND_URL}/api/generate`
+   * injects header `x-api-key: API_KEY`
+   * forwards response
+
+2. Add route tests:
+
+   * mock `global.fetch`
+   * verify header injection
+
+### Acceptance Criteria
+
+* [ ] Route proxies correctly
+
+---
+
+## STEP 18: Frontend – UI MVP (Form + Render)
+
+### Tasks
+
+1. Keep warm-up behavior:
+
+   * on page load: `fetch('/api/health').catch(()=>{})`
+
+2. Build UI:
+
+   * repo URL input
+   * generate button
+   * loading + error
+   * render:
+
+     * overview markdown
+     * features list
+     * feature markdown
+
+3. Use markdown renderer:
+
+   * `react-markdown` + `remark-gfm`
+
+4. Add minimal UI tests:
+
+   * form submits
+   * loading state toggles
+
+### Acceptance Criteria
+
+* [ ] User can generate and read wiki
+
+---
+
+## STEP 19: Frontend – Navigable Wiki Pages
+
+### Tasks
+
+* Add route `/wiki/[owner]/[repo]` for overview
+* Add sidebar with feature list
+* Add anchor links
+
+### Acceptance Criteria
+
+* [ ] Navigable experience
+
+---
+
+## STEP 20: CI – Tests Gate Deploy
+
+### Tasks
+
+1. Add/confirm `.github/workflows/test.yml`:
+
+   * Backend:
+
+     * create venv
+     * install requirements
+     * `pytest -q`
+   * Frontend:
+
+     * `npm ci`
+     * `npm run test`
+     * `npm run build`
+
+2. Ensure deploy workflows either:
+
+   * depend on test workflow, or
+   * run tests inline before deploy
+
+### Acceptance Criteria
+
+* [ ] broken tests prevent deploy
+
+---
+
+## STEP 21: Deploy + Smoke Checks (Every Merge)
+
+### Required env vars
+
+Backend Cloud Run:
+
+* `API_KEY`
+* `OPENAI_API_KEY`
+
+Frontend Cloud Run:
+
+* `BACKEND_URL`
+* `API_KEY`
+
+### Smoke checks
+
+* Backend:
+
+  * `GET /health`
+* Frontend:
+
+  * `GET /api/health`
+  * `POST /api/generate` with sample repo
+
+---
+
+# Appendices
+
+## Appendix A: LLM Prompts (Templates)
+
+### A1: Feature proposal prompt
+
+**System**
+
+* You are a senior engineer writing user-facing documentation.
+* Output JSON only.
+
+**User** (template)
+
+* Repo: {repo_id}
+* README snippets:
+
+  * {readme_headings}
+* Routes/endpoints signals:
+
+  * {routes}
+* Entry points:
+
+  * {entrypoints}
+* Instructions:
+
+  * Propose 5–9 user-facing features.
+  * Avoid technical layers (no “utils”, “helpers”, “components”, “frontend”, “backend”).
+  * Each feature must include seed file paths.
+
+Output JSON schema: `FeatureProposalList`.
+
+### A2: Page writing prompt
+
+**System**
+
+* You produce accurate markdown documentation. Cite sources.
+
+**User**
+
+* Feature: {title}
+* Description: {description}
+* Evidence chunks (each with ID):
+
+  * {chunk_id}: {chunk_text}
+
+Instructions:
+
+* Write markdown for this feature.
+* Every nontrivial claim must include at least one citation in the form `[path:start-end]`.
+* Do not invent file paths.
+* Output markdown only.
+
+---
+
+## Appendix B: Determinism + Limits
+
+Recommended defaults:
+
+* max files downloaded: 300
+* max file size: 100KB
+* max chunks per feature: 40
+* max hops in import graph expansion: 2
+* LLM retries: 2
+
+---
+
+## Appendix C: Cloud Run Notes
+
+* Cold starts are normal.
+* Frontend warm-up call to `/api/health` is recommended.
+* Deploy time for frontend from source can be 3–7 minutes.

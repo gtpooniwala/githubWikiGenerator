@@ -4,7 +4,7 @@ import os
 
 app = FastAPI(title="Wiki Generator API")
 
-API_KEY = os.environ.get("API_KEY", "dev-key-123")
+API_KEY = os.environ.get("BACKEND_API_KEY", "dev-key-123")
 
 # CORS - allow frontend to call us
 app.add_middleware(
