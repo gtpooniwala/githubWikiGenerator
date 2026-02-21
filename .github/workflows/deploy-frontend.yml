@@ -1,0 +1,52 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend.yml"
+
+env:
+  PROJECT_ID: pushstart-481717
+  SERVICE_NAME: wiki-generator-frontend
+  REGION: us-central1
+  BACKEND_URL: https://wiki-generator-backend-254204084242.us-central1.run.app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: GCP Cloud Run
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: github-actions@pushstart-481717.iam.gserviceaccount.com
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: pushstart-481717
+
+      - name: Deploy to Cloud Run
+        run: |
+          cd frontend
+          gcloud run deploy $SERVICE_NAME \
+            --source . \
+            --region $REGION \
+            --set-env-vars "BACKEND_URL=https://wiki-generator-backend-254204084242.us-central1.run.app,API_KEY=${{ secrets.API_KEY }}"
+
+      - name: Show URL
+        run: |
+          echo "Service deployed to:"
+          gcloud run services describe $SERVICE_NAME --region $REGION --format 'value(status.url)'

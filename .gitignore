@@ -1,0 +1,16 @@
+# standard gitignore for next js and python repo
+
+.next/
+out/
+dist/
+build/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+.env
+.env.local
+.env.development
+.env.test
+.env.production
