@@ -97,7 +97,7 @@ Step X: <short name>
 | 9 | Frontend UI MVP | `60bff50` | `RepoForm`, `WikiViewer`, `Markdown` components; `page.tsx` rewrite; `react-markdown`; 10 UI tests |
 | 10 | Real-time SSE status updates | `91d51d0` | `generate.py` real pipeline (repo_loaded→chunked→signals_extracted→done); `stream/route.ts` proxy; `page.tsx` EventSource consumer; 10 backend + 6 frontend new tests |
 | 11 | File-level import graph | `544d4c1` | `services/import_graph.py` — Python + JS/TS; 22 tests |
-| 12 | Search index over chunks | pending | `services/search_index.py` — BM25 + substring fallback; 24 tests |
+| 12 | Search index over chunks | `0627c74` | `services/search_index.py` — BM25 + substring fallback; 24 tests |
 
 **130 backend tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`, `test_generate_stream`, `test_import_graph`, `test_search_index`.
 **23 frontend tests passing**: `route-generate.test.ts` (7) + `route-stream.test.ts` (5) + `ui-basic.test.tsx` (11).
