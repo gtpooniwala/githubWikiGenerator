@@ -109,8 +109,8 @@ Step X: <short name>
 ### Critical Technical Context (for new sessions)
 
 #### Environment & Keys
-* Auth env var is **`BACKEND_API_KEY`** — read in `backend/src/config.py` as `API_KEY = os.environ.get("BACKEND_API_KEY", "dev-key-123")`
-* Local dev key lives in `backend/.env` (gitignored). Cloud Run has a different value set — do NOT assume `dev-key-123` works against production.
+* Auth env var is **`BACKEND_API_KEY`** — read in `backend/src/config.py`. No hardcoded default; if unset, auth always fails.
+* The only valid values are in `backend/.env` (gitignored, local dev) and GitHub Secrets (Cloud Run). Never hardcode a key value in code or tests.
 * `OPENAI_API_KEY` is backend-only; never expose to frontend.
 
 #### Running Tests

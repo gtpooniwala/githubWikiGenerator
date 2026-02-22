@@ -1,12 +1,21 @@
+import pytest
 from fastapi.testclient import TestClient
 
+import config
 from main import app
 from models.schemas import GenerateResponse
 
 client = TestClient(app)
 
-VALID_KEY = "dev-key-123"
-HEADERS = {"x-api-key": VALID_KEY}
+_TEST_KEY = "test-only-key"
+
+
+@pytest.fixture(autouse=True)
+def patch_api_key(monkeypatch):
+    monkeypatch.setattr(config, "API_KEY", _TEST_KEY)
+
+
+HEADERS = {"x-api-key": _TEST_KEY}
 
 
 def test_response_matches_schema():
