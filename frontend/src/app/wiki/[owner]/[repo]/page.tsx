@@ -2,11 +2,51 @@
 
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { generateWiki, GenerateResponse } from '@/lib/api';
+import { GenerateResponse } from '@/lib/api';
 import { WikiViewer } from '@/components/WikiViewer';
 
 interface WikiPageProps {
   params: Promise<{ owner: string; repo: string }>;
+}
+
+interface StatusMessage {
+  label: string;
+  detail?: string;
+}
+
+const SSE_EVENTS = [
+  'connecting',
+  'repo_loaded',
+  'signals_extracted',
+  'chunked',
+  'import_graph_built',
+  'search_index_built',
+  'features_proposed',
+  'evidence_gathered',
+  'pages_written',
+  'overview_written',
+  'done',
+] as const;
+
+function parseStatusDetail(event: string, data: Record<string, unknown>): string | undefined {
+  if (event === 'repo_loaded' && data.file_count != null)
+    return `${data.file_count} files · commit ${String(data.commit_sha ?? '').slice(0, 7)}`;
+  if (event === 'chunked' && data.chunk_count != null) return `${data.chunk_count} chunks`;
+  if (event === 'signals_extracted') {
+    const parts: string[] = [];
+    if (data.routes) parts.push(`${data.routes} routes`);
+    if (data.headings) parts.push(`${data.headings} headings`);
+    if (data.entrypoints) parts.push(`${data.entrypoints} entrypoints`);
+    return parts.length ? parts.join(' · ') : undefined;
+  }
+  if (event === 'import_graph_built' && data.edges != null) return `${data.edges} edges`;
+  if (event === 'search_index_built' && data.indexed_chunks != null)
+    return `${data.indexed_chunks} chunks indexed`;
+  if (event === 'features_proposed' && Array.isArray(data.features))
+    return (data.features as Array<{ title: string }>).map((f) => f.title).join(', ');
+  if (event === 'evidence_gathered' && data.feature_count != null)
+    return `${data.feature_count} features`;
+  return undefined;
 }
 
 export default function WikiPage({ params }: WikiPageProps) {
@@ -15,21 +55,48 @@ export default function WikiPage({ params }: WikiPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [wikiData, setWikiData] = useState<GenerateResponse | null>(null);
+  const [statusMessages, setStatusMessages] = useState<StatusMessage[]>([]);
 
   useEffect(() => {
     const repoUrl = `https://github.com/${owner}/${repo}`;
     setLoading(true);
     setError(null);
+    setStatusMessages([]);
+    setWikiData(null);
 
-    generateWiki(repoUrl)
-      .then((data) => {
-        setWikiData(data);
-        setLoading(false);
-      })
-      .catch((err: Error) => {
-        setError(err.message);
-        setLoading(false);
+    const es = new EventSource(`/api/generate/stream?repo_url=${encodeURIComponent(repoUrl)}`);
+
+    SSE_EVENTS.forEach((eventName) => {
+      es.addEventListener(eventName, (e: MessageEvent) => {
+        let parsed: Record<string, unknown> = {};
+        try { parsed = JSON.parse(e.data); } catch { /* ignore */ }
+        setStatusMessages((prev) => [
+          ...prev,
+          { label: String(parsed.message ?? eventName), detail: parseStatusDetail(eventName, parsed) },
+        ]);
+        if (eventName === 'done') {
+          es.close();
+          setWikiData(parsed as unknown as GenerateResponse);
+          setLoading(false);
+        }
       });
+    });
+
+    es.addEventListener('error', (e: MessageEvent) => {
+      let msg = 'Stream error';
+      try { msg = JSON.parse(e.data)?.message ?? msg; } catch { /* ignore */ }
+      setError(msg);
+      es.close();
+      setLoading(false);
+    });
+
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) {
+        setLoading(false);
+      }
+    };
+
+    return () => es.close();
   }, [owner, repo]);
 
   return (
@@ -76,8 +143,31 @@ export default function WikiPage({ params }: WikiPageProps) {
           </svg>
           <div className="text-center">
             <p className="font-medium text-slate-700">Generating wiki for {owner}/{repo}</p>
-            <p className="text-sm text-slate-400 mt-1">This may take up to a minute…</p>
+            {statusMessages.length === 0 && (
+              <p className="text-sm text-slate-400 mt-1">This may take up to a minute…</p>
+            )}
           </div>
+          {statusMessages.length > 0 && (
+            <ul className="mt-2 space-y-1 text-sm">
+              {statusMessages.map((msg, i) => {
+                const isLast = i === statusMessages.length - 1;
+                return (
+                  <li
+                    key={i}
+                    className={`flex items-baseline gap-2 ${
+                      isLast ? 'text-blue-600 font-medium' : 'text-slate-500'
+                    }`}
+                  >
+                    <span className="shrink-0 w-4 text-center">{isLast ? '▶' : '✓'}</span>
+                    <span>
+                      {msg.label}
+                      {msg.detail && <span className="ml-1 text-slate-400">({msg.detail})</span>}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       )}
 
