@@ -139,21 +139,25 @@ async def _pipeline_stages(repo_url: str, queue: asyncio.Queue) -> None:
     # Emit immediately so the browser knows the connection is alive before the
     # first blocking network call.
     await queue.put(
-        _sse_message("connecting", {"message": f"Connecting to repository {owner}/{repo}…"})
+        _sse_message(
+            "connecting", {"message": f"Connecting to repository {owner}/{repo}…"}
+        )
     )
 
     # ------------------------------------------------------------------
     # Stage 1: Load repo snapshot (parallel network I/O)
     # ------------------------------------------------------------------
     snapshot = await asyncio.to_thread(load_snapshot, owner, repo)
-    await queue.put(_sse_message(
-        "repo_loaded",
-        {
-            "message": "Repository loaded",
-            "file_count": len(snapshot.files),
-            "commit_sha": snapshot.commit_sha,
-        },
-    ))
+    await queue.put(
+        _sse_message(
+            "repo_loaded",
+            {
+                "message": "Repository loaded",
+                "file_count": len(snapshot.files),
+                "commit_sha": snapshot.commit_sha,
+            },
+        )
+    )
 
     # ------------------------------------------------------------------
     # Stage 2: Extract signals (README headings, HTTP routes, entry points)
@@ -168,15 +172,17 @@ async def _pipeline_stages(repo_url: str, queue: asyncio.Queue) -> None:
         routes=routes,
         entrypoints=entrypoints,
     )
-    await queue.put(_sse_message(
-        "signals_extracted",
-        {
-            "message": "Signals extracted",
-            "headings": len(signals.readme_headings),
-            "routes": len(signals.routes),
-            "entrypoints": len(signals.entrypoints),
-        },
-    ))
+    await queue.put(
+        _sse_message(
+            "signals_extracted",
+            {
+                "message": "Signals extracted",
+                "headings": len(signals.readme_headings),
+                "routes": len(signals.routes),
+                "entrypoints": len(signals.entrypoints),
+            },
+        )
+    )
 
     # ------------------------------------------------------------------
     # Stage 3: Chunk all files
@@ -184,13 +190,15 @@ async def _pipeline_stages(repo_url: str, queue: asyncio.Queue) -> None:
     all_chunks = []
     for f in snapshot.files:
         all_chunks.extend(chunker_mod.chunk_file(f.path, f.content))
-    await queue.put(_sse_message(
-        "chunked",
-        {
-            "message": "Files chunked",
-            "chunk_count": len(all_chunks),
-        },
-    ))
+    await queue.put(
+        _sse_message(
+            "chunked",
+            {
+                "message": "Files chunked",
+                "chunk_count": len(all_chunks),
+            },
+        )
+    )
 
     # ------------------------------------------------------------------
     # Stage 4: Build import graph (CPU-bound)
@@ -199,13 +207,15 @@ async def _pipeline_stages(repo_url: str, queue: asyncio.Queue) -> None:
         import_graph_mod.build_import_graph, snapshot.files
     )
     edge_count = sum(len(v) for v in import_graph.values())
-    await queue.put(_sse_message(
-        "import_graph_built",
-        {
-            "message": "Import graph built",
-            "edges": edge_count,
-        },
-    ))
+    await queue.put(
+        _sse_message(
+            "import_graph_built",
+            {
+                "message": "Import graph built",
+                "edges": edge_count,
+            },
+        )
+    )
 
     # Free raw file content that is not needed by write_overview_page() —
     # chunks hold all the text required for LLM stages.
@@ -218,26 +228,30 @@ async def _pipeline_stages(repo_url: str, queue: asyncio.Queue) -> None:
     # ------------------------------------------------------------------
     search_index = SearchIndex()
     search_index.add_chunks(all_chunks)
-    await queue.put(_sse_message(
-        "search_index_built",
-        {
-            "message": "Search index built",
-            "indexed_chunks": len(all_chunks),
-        },
-    ))
+    await queue.put(
+        _sse_message(
+            "search_index_built",
+            {
+                "message": "Search index built",
+                "indexed_chunks": len(all_chunks),
+            },
+        )
+    )
 
     # ------------------------------------------------------------------
     # Stage 6: Propose features (LLM)
     # ------------------------------------------------------------------
     proposal = await asyncio.to_thread(propose_features, snapshot, signals)
     features = proposal.features
-    await queue.put(_sse_message(
-        "features_proposed",
-        {
-            "message": f"{len(features)} features identified",
-            "features": [{"id": f.id, "title": f.title} for f in features],
-        },
-    ))
+    await queue.put(
+        _sse_message(
+            "features_proposed",
+            {
+                "message": f"{len(features)} features identified",
+                "features": [{"id": f.id, "title": f.title} for f in features],
+            },
+        )
+    )
 
     # ------------------------------------------------------------------
     # Stage 7: Gather evidence (seed → import-graph expand → BM25 → dedup)
@@ -245,13 +259,15 @@ async def _pipeline_stages(repo_url: str, queue: asyncio.Queue) -> None:
     packs = await asyncio.to_thread(
         gather_all_evidence, features, all_chunks, import_graph, search_index
     )
-    await queue.put(_sse_message(
-        "evidence_gathered",
-        {
-            "message": "Evidence gathered",
-            "feature_count": len(packs),
-        },
-    ))
+    await queue.put(
+        _sse_message(
+            "evidence_gathered",
+            {
+                "message": "Evidence gathered",
+                "feature_count": len(packs),
+            },
+        )
+    )
 
     # ------------------------------------------------------------------
     # Stage 8: Write feature pages (LLM × N)
@@ -264,12 +280,14 @@ async def _pipeline_stages(repo_url: str, queue: asyncio.Queue) -> None:
         repo=repo,
         commit_sha=snapshot.commit_sha,
     )
-    await queue.put(_sse_message(
-        "pages_written",
-        {
-            "message": f"{len(wiki_features)} feature pages written",
-        },
-    ))
+    await queue.put(
+        _sse_message(
+            "pages_written",
+            {
+                "message": f"{len(wiki_features)} feature pages written",
+            },
+        )
+    )
 
     # ------------------------------------------------------------------
     # Stage 9: Write overview page (LLM)
@@ -281,15 +299,17 @@ async def _pipeline_stages(repo_url: str, queue: asyncio.Queue) -> None:
         repo=repo,
         commit_sha=snapshot.commit_sha,
     )
-    await queue.put(_sse_message(
-        "overview_written",
-        {
-            "message": "Overview page written",
-        },
-    ))
+    await queue.put(
+        _sse_message(
+            "overview_written",
+            {
+                "message": "Overview page written",
+            },
+        )
+    )
 
     # ------------------------------------------------------------------
-    # Stage 10: Assemble and return — full payload in the done event
+    # Assemble and emit done — full payload in the done event
     # ------------------------------------------------------------------
     response = GenerateResponse(
         repo_id=f"{owner}/{repo}",

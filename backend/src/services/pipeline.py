@@ -5,17 +5,17 @@ Takes a raw GitHub repo URL and returns a fully-populated
 
 Pipeline stages
 ---------------
-1.  **Parse** repo URL into ``owner`` and ``repo``.
-2.  **Load snapshot** — fetch tree + file contents from GitHub.
-3.  **Extract signals** — README headings, HTTP routes, entry points.
-4.  **Chunk files** — split each file into line-numbered chunks.
-5.  **Build import graph** — file-level dependency graph.
-6.  **Build search index** — BM25 index over all chunks.
-7.  **Propose features** — LLM call: 5–9 user-facing features.
-8.  **Gather evidence** — bounded, deduped chunk packs per feature.
-9.  **Write feature pages** — LLM call per feature with citations.
-10. **Write overview** — LLM call using README + manifests.
-11. **Assemble** :class:`~models.schemas.GenerateResponse`.
+1. **Load snapshot** — fetch tree + file contents from GitHub.
+2. **Extract signals** — README headings, HTTP routes, entry points.
+3. **Chunk files** — split each file into line-numbered chunks.
+4. **Build import graph** — file-level dependency graph.
+5. **Build search index** — BM25 index over all chunks.
+6. **Propose features** — LLM call: 5–9 user-facing features.
+7. **Gather evidence** — bounded, deduped chunk packs per feature.
+8. **Write feature pages** — LLM call per feature with citations.
+9. **Write overview** — LLM call using README + manifests.
+
+(Then assemble and return :class:`~models.schemas.GenerateResponse`.)
 
 Debug mode
 ----------
@@ -134,7 +134,7 @@ def run_pipeline(repo_url: str, *, debug: bool = False) -> GenerateResponse:
     owner, repo = _parse_owner_repo(repo_url)
 
     # ------------------------------------------------------------------
-    # 1. Load snapshot
+    # Stage 1: Load snapshot
     # ------------------------------------------------------------------
     snapshot = repo_loader.load_snapshot(owner, repo)
     commit_sha = snapshot.commit_sha
@@ -152,7 +152,7 @@ def run_pipeline(repo_url: str, *, debug: bool = False) -> GenerateResponse:
         )
 
     # ------------------------------------------------------------------
-    # 2. Extract signals
+    # Stage 2: Extract signals
     # ------------------------------------------------------------------
     readme_headings = (
         extract_readme_signals(snapshot.readme.content) if snapshot.readme else []
@@ -176,7 +176,7 @@ def run_pipeline(repo_url: str, *, debug: bool = False) -> GenerateResponse:
         )
 
     # ------------------------------------------------------------------
-    # 3. Chunk all files
+    # Stage 3: Chunk all files
     # ------------------------------------------------------------------
     all_chunks = []
     for file_entry in snapshot.files:
@@ -192,7 +192,7 @@ def run_pipeline(repo_url: str, *, debug: bool = False) -> GenerateResponse:
         )
 
     # ------------------------------------------------------------------
-    # 4. Build import graph
+    # Stage 4: Build import graph
     # ------------------------------------------------------------------
     import_graph = import_graph_mod.build_import_graph(snapshot.files)
 
@@ -210,7 +210,7 @@ def run_pipeline(repo_url: str, *, debug: bool = False) -> GenerateResponse:
             _fe.content = ""
 
     # ------------------------------------------------------------------
-    # 5. Build search index
+    # Stage 5: Build search index
     # ------------------------------------------------------------------
     search_index = SearchIndex()
     search_index.add_chunks(all_chunks)
@@ -219,7 +219,7 @@ def run_pipeline(repo_url: str, *, debug: bool = False) -> GenerateResponse:
         _debug_print("search_index", {"indexed_chunks": len(all_chunks)})
 
     # ------------------------------------------------------------------
-    # 6. Propose features (LLM)
+    # Stage 6: Propose features (LLM)
     # ------------------------------------------------------------------
     proposal_list = propose_features(snapshot, signals)
     features = proposal_list.features
@@ -237,7 +237,7 @@ def run_pipeline(repo_url: str, *, debug: bool = False) -> GenerateResponse:
         )
 
     # ------------------------------------------------------------------
-    # 7. Gather evidence
+    # Stage 7: Gather evidence
     # ------------------------------------------------------------------
     packs = gather_all_evidence(features, all_chunks, import_graph, search_index)
 
@@ -254,14 +254,14 @@ def run_pipeline(repo_url: str, *, debug: bool = False) -> GenerateResponse:
         )
 
     # ------------------------------------------------------------------
-    # 8. Write feature pages (LLM)
+    # Stage 8: Write feature pages (LLM)
     # ------------------------------------------------------------------
     wiki_features: list[WikiFeature] = write_all_feature_pages(
         features, packs, owner=owner, repo=repo, commit_sha=commit_sha
     )
 
     # ------------------------------------------------------------------
-    # 9. Write overview page (LLM)
+    # Stage 9: Write overview page (LLM)
     # ------------------------------------------------------------------
     overview_md = write_overview_page(
         snapshot, owner=owner, repo=repo, commit_sha=commit_sha
@@ -277,7 +277,7 @@ def run_pipeline(repo_url: str, *, debug: bool = False) -> GenerateResponse:
         )
 
     # ------------------------------------------------------------------
-    # 10. Assemble response
+    # Assemble and return
     # ------------------------------------------------------------------
     return GenerateResponse(
         repo_id=f"{owner}/{repo}",

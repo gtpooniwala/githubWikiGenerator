@@ -21,6 +21,21 @@ const SSE_EVENTS = [
   'done',
 ] as const;
 
+// The 9 events that are true pipeline stages and receive a step number.
+// 'connecting' (pre-flight handshake) and 'done' (completion signal) are
+// intentionally excluded.
+const PIPELINE_STAGES = new Set([
+  'repo_loaded',
+  'signals_extracted',
+  'chunked',
+  'import_graph_built',
+  'search_index_built',
+  'features_proposed',
+  'evidence_gathered',
+  'pages_written',
+  'overview_written',
+]);
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type Tab = 'home' | 'status' | 'wiki';
@@ -181,7 +196,7 @@ function CollapsibleStatusItem({
   isLoading,
 }: {
   msg: StatusMessage;
-  stepNumber: number;
+  stepNumber?: number;   // undefined for connecting / done
   isActive: boolean;
   isLoading: boolean;
 }) {
@@ -196,14 +211,20 @@ function CollapsibleStatusItem({
         className="w-full flex items-center gap-3 py-2.5 text-left group"
         aria-expanded={open}
       >
-        {/* Step number pill */}
-        <span className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-xs font-bold ${
-          isActive && isLoading
-            ? 'bg-blue-600 text-white'
-            : 'bg-slate-100 text-slate-500'
-        }`}>
-          {stepNumber}
-        </span>
+        {/* Step number pill — or a neutral dot for non-stage events */}
+        {stepNumber !== undefined ? (
+          <span className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-xs font-bold ${
+            isActive && isLoading
+              ? 'bg-blue-600 text-white'
+              : 'bg-slate-100 text-slate-500'
+          }`}>
+            {stepNumber}
+          </span>
+        ) : (
+          <span className="shrink-0 w-7 h-7 flex items-center justify-center">
+            <span className="w-2 h-2 rounded-full bg-slate-300" />
+          </span>
+        )}
 
         {/* Status icon */}
         <span className="shrink-0" aria-hidden="true">
@@ -564,15 +585,22 @@ export default function Home() {
                   </div>
                 ) : (
                   <ul>
-                    {statusMessages.map((msg, i) => (
-                      <CollapsibleStatusItem
-                        key={i}
-                        msg={msg}
-                        stepNumber={i + 1}
-                        isActive={i === statusMessages.length - 1}
-                        isLoading={loading}
-                      />
-                    ))}
+                    {(() => {
+                      let step = 0;
+                      return statusMessages.map((msg, i) => {
+                        const isStage = PIPELINE_STAGES.has(msg.eventType);
+                        if (isStage) step++;
+                        return (
+                          <CollapsibleStatusItem
+                            key={i}
+                            msg={msg}
+                            stepNumber={isStage ? step : undefined}
+                            isActive={i === statusMessages.length - 1}
+                            isLoading={loading}
+                          />
+                        );
+                      });
+                    })()}
                     {/* Trailing placeholder while loading and no events yet */}
                     {loading && statusMessages.length === 0 && (
                       <li className="px-4 py-3 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-600 font-medium flex items-center gap-3">
