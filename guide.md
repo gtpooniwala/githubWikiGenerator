@@ -111,7 +111,7 @@ Step X: <short name>
 
 * **Backend Cloud Run URL:** `https://wiki-generator-backend-ud74aktrjq-uc.a.run.app`
 * **GCP project:** `pushstart-481717`, region `us-central1`
-* **Latest deployed commit:** `91d51d0` (Step 10 — redeploy pending)
+* **Latest deployed commit:** `1c6b091` (guide update after Step 13 — redeploy pending for steps 11-13)
 * Smoke checks: `GET /health` → `{"status":"healthy"}` ✅
 
 ### Critical Technical Context (for new sessions)
@@ -120,6 +120,7 @@ Step X: <short name>
 * Auth env var is **`BACKEND_API_KEY`** — read in `backend/src/config.py`. No hardcoded default; if unset, auth always fails.
 * The only valid values are in `.env` at the project root (gitignored, local dev) and GitHub Secrets (Cloud Run). Never hardcode a key value in code or tests.
 * `OPENAI_API_KEY` is backend-only; never expose to frontend.
+* `GITHUB_TOKEN` — optional; set on Cloud Run via `gcloud run services update` to raise GitHub API rate limits from 60 → 5000 req/hr. `github_client.py` reads it at module load time via `os.environ.get("GITHUB_TOKEN", "")`. For local dev, add it to `.env`.
 
 #### Running Tests
 ```bash
@@ -133,19 +134,24 @@ Use `GH_PAGER=cat` prefix for any `gh` CLI commands to avoid pager hangs.
 ```
 backend/src/
 ├── main.py          # FastAPI app, wires routers; CMD: uvicorn main:app --host 0.0.0.0 --port 8080
-├── config.py        # Reads BACKEND_API_KEY, OPENAI_API_KEY
+├── config.py        # Reads BACKEND_API_KEY, OPENAI_API_KEY (module-level constants)
 ├── auth.py          # require_api_key() FastAPI dependency
 ├── models/
-│   └── schemas.py   # GenerateRequest, WikiFeature, GenerateResponse
+│   ├── schemas.py        # GenerateRequest, WikiFeature, GenerateResponse
+│   ├── llm_schemas.py    # FeatureProposalList, EvidenceSelection, WikiPageDraft
+│   └── repo_snapshot.py  # RepoSnapshot, FileEntry
 ├── routers/
 │   ├── health.py    # GET /health
-│   └── generate.py  # POST /api/generate (stub returning deterministic GenerateResponse)
+│   └── generate.py  # POST /api/generate + GET /api/generate/stream (SSE)
 └── services/
-    ├── github_client.py  # get_repo, get_branch_sha, get_tree, get_file (httpx)
+    ├── github_client.py  # get_repo, get_branch_sha, get_tree, get_file (httpx; GITHUB_TOKEN optional)
     ├── file_filter.py    # should_include(path, size_bytes, is_binary_guess) -> bool
     ├── repo_loader.py    # load_snapshot(owner, repo) -> RepoSnapshot
     ├── chunker.py        # chunk_file(path, content) -> list[Chunk]; semantic + sliding window
-    └── signals.py        # extract_readme_signals, extract_route_signals, extract_entrypoints
+    ├── signals.py        # extract_readme_signals, extract_route_signals, extract_entrypoints
+    ├── import_graph.py   # build_import_graph(files) -> dict[str, list[str]] — Python + JS/TS
+    ├── search_index.py   # SearchIndex.from_chunks(chunks); BM25 + substring fallback
+    └── llm.py            # chat_text(), chat_json(schema) — OpenAI wrapper with retries
 ```
 `PYTHONPATH=/app/src` in Dockerfile; `pythonpath = src` in `pytest.ini`.
 
@@ -163,6 +169,16 @@ Always use: `monkeypatch.setattr(config, "API_KEY", "test-key")` in every backen
 Each `data:` payload is a JSON object `{ "message": "...", ...stage-specific fields }`.  
 Next.js proxy at `frontend/src/app/api/generate/stream/route.ts` forwards `repo_url` param + `x-api-key` header.  
 Browser `EventSource` in `page.tsx` parses per-event JSON to present status messages + detail lines.
+
+#### LLM Test Pattern (Critical)
+`services/llm.py` holds a module-level `_client`. Use `_set_client(mock)` to inject a mock and always call `_set_client(None)` in teardown to reset. Never call real OpenAI in tests.
+```python
+from services.llm import _set_client
+_set_client(_mock_client("...json..."))
+# ... test ...
+_set_client(None)
+```
+Patch `services.llm.time.sleep` to keep retry tests instant.
 
 #### respx Fixtures
 Shared respx fixtures use `assert_all_called=False` — this is correct, not a workaround.
