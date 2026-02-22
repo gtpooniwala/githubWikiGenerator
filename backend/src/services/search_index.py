@@ -25,8 +25,8 @@ from services.chunker import Chunk
 # BM25 hyper-parameters (standard defaults)
 # ---------------------------------------------------------------------------
 
-_K1: float = 1.5   # term-frequency saturation
-_B: float = 0.75   # length normalisation factor
+_K1: float = 1.5  # term-frequency saturation
+_B: float = 0.75  # length normalisation factor
 
 
 def _tokenise(text: str) -> list[str]:

@@ -1,4 +1,5 @@
 """Tests for the real-pipeline SSE /api/generate/stream endpoint."""
+
 import json
 from unittest.mock import MagicMock, patch
 
@@ -38,12 +39,17 @@ def mock_pipeline():
         patch("routers.generate.extract_route_signals", return_value=[]),
         patch("routers.generate.extract_entrypoints", return_value=[]),
     ):
-        yield {"snapshot": snapshot, "load_snapshot": mock_load, "chunk_file": mock_chunk}
+        yield {
+            "snapshot": snapshot,
+            "load_snapshot": mock_load,
+            "chunk_file": mock_chunk,
+        }
 
 
 # ---------------------------------------------------------------------------
 # Auth / validation
 # ---------------------------------------------------------------------------
+
 
 def test_stream_missing_auth():
     r = client.get("/api/generate/stream", params={"repo_url": REPO_URL})
@@ -51,7 +57,11 @@ def test_stream_missing_auth():
 
 
 def test_stream_wrong_auth():
-    r = client.get("/api/generate/stream", params={"repo_url": REPO_URL}, headers={"x-api-key": "wrong"})
+    r = client.get(
+        "/api/generate/stream",
+        params={"repo_url": REPO_URL},
+        headers={"x-api-key": "wrong"},
+    )
     assert r.status_code == 401
 
 
@@ -64,21 +74,42 @@ def test_stream_missing_repo_url():
 # Success path
 # ---------------------------------------------------------------------------
 
+
 def test_stream_returns_event_stream_content_type(mock_pipeline):
-    r = client.get("/api/generate/stream", params={"repo_url": REPO_URL}, headers={"x-api-key": VALID_KEY})
+    r = client.get(
+        "/api/generate/stream",
+        params={"repo_url": REPO_URL},
+        headers={"x-api-key": VALID_KEY},
+    )
     assert r.status_code == 200
     assert "text/event-stream" in r.headers["content-type"]
 
 
 def test_stream_emits_all_expected_events(mock_pipeline):
-    r = client.get("/api/generate/stream", params={"repo_url": REPO_URL}, headers={"x-api-key": VALID_KEY})
+    r = client.get(
+        "/api/generate/stream",
+        params={"repo_url": REPO_URL},
+        headers={"x-api-key": VALID_KEY},
+    )
     text = r.text
-    for event_name in ["connecting", "repo_loaded", "chunked", "signals_extracted", "features_proposed", "pages_written", "done"]:
+    for event_name in [
+        "connecting",
+        "repo_loaded",
+        "chunked",
+        "signals_extracted",
+        "features_proposed",
+        "pages_written",
+        "done",
+    ]:
         assert f"event: {event_name}" in text, f"Missing event: {event_name}"
 
 
 def test_stream_event_blocks_have_valid_json_data(mock_pipeline):
-    r = client.get("/api/generate/stream", params={"repo_url": REPO_URL}, headers={"x-api-key": VALID_KEY})
+    r = client.get(
+        "/api/generate/stream",
+        params={"repo_url": REPO_URL},
+        headers={"x-api-key": VALID_KEY},
+    )
     blocks = [b for b in r.text.strip().split("\n\n") if b.strip()]
     assert len(blocks) == 7
     for block in blocks:
@@ -91,7 +122,11 @@ def test_stream_event_blocks_have_valid_json_data(mock_pipeline):
 
 
 def test_stream_repo_loaded_includes_metadata(mock_pipeline):
-    r = client.get("/api/generate/stream", params={"repo_url": REPO_URL}, headers={"x-api-key": VALID_KEY})
+    r = client.get(
+        "/api/generate/stream",
+        params={"repo_url": REPO_URL},
+        headers={"x-api-key": VALID_KEY},
+    )
     blocks = [b for b in r.text.strip().split("\n\n") if b.strip()]
     block = next(b for b in blocks if "event: repo_loaded" in b)
     data = json.loads(block.split("data:")[1].strip())
@@ -101,7 +136,11 @@ def test_stream_repo_loaded_includes_metadata(mock_pipeline):
 
 def test_stream_chunked_includes_chunk_count(mock_pipeline):
     # 3 files × 1 chunk each = 3 chunks
-    r = client.get("/api/generate/stream", params={"repo_url": REPO_URL}, headers={"x-api-key": VALID_KEY})
+    r = client.get(
+        "/api/generate/stream",
+        params={"repo_url": REPO_URL},
+        headers={"x-api-key": VALID_KEY},
+    )
     blocks = [b for b in r.text.strip().split("\n\n") if b.strip()]
     block = next(b for b in blocks if "event: chunked" in b)
     data = json.loads(block.split("data:")[1].strip())
@@ -109,12 +148,20 @@ def test_stream_chunked_includes_chunk_count(mock_pipeline):
 
 
 def test_stream_done_is_last_event(mock_pipeline):
-    r = client.get("/api/generate/stream", params={"repo_url": REPO_URL}, headers={"x-api-key": VALID_KEY})
+    r = client.get(
+        "/api/generate/stream",
+        params={"repo_url": REPO_URL},
+        headers={"x-api-key": VALID_KEY},
+    )
     blocks = [b for b in r.text.strip().split("\n\n") if b.strip()]
     assert "event: done" in blocks[-1]
 
 
 def test_stream_calls_real_services(mock_pipeline):
-    client.get("/api/generate/stream", params={"repo_url": REPO_URL}, headers={"x-api-key": VALID_KEY})
+    client.get(
+        "/api/generate/stream",
+        params={"repo_url": REPO_URL},
+        headers={"x-api-key": VALID_KEY},
+    )
     mock_pipeline["load_snapshot"].assert_called_once_with("owner", "repo")
     assert mock_pipeline["chunk_file"].call_count == 3  # once per file

@@ -93,7 +93,9 @@ def write_feature_page(
     )
 
     raw_md = llm.chat_text(_SYSTEM, user_prompt)
-    resolved_md = resolve_citations(raw_md, owner=owner, repo=repo, commit_sha=commit_sha)
+    resolved_md = resolve_citations(
+        raw_md, owner=owner, repo=repo, commit_sha=commit_sha
+    )
 
     return WikiFeature(
         id=feature.id,
@@ -130,6 +132,8 @@ def write_all_feature_pages(
             # Shouldn't happen in normal flow; produce a stub page rather than crash.
             pack = EvidencePack(feature_id=feature.id, chunks=[])
         pages.append(
-            write_feature_page(feature, pack, owner=owner, repo=repo, commit_sha=commit_sha)
+            write_feature_page(
+                feature, pack, owner=owner, repo=repo, commit_sha=commit_sha
+            )
         )
     return pages

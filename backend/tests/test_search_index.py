@@ -47,8 +47,18 @@ class TestBasicRetrieval:
         chunks = [
             _chunk("auth.py", 1, 10, "def login(user, password):\n    verify(user)\n"),
             _chunk("auth.py", 11, 20, "def logout(session):\n    session.clear()\n"),
-            _chunk("models.py", 1, 15, "class User:\n    email = ''\n    password_hash = ''\n"),
-            _chunk("routes.py", 1, 8, "def get_profile(user_id):\n    return db.fetch(user_id)\n"),
+            _chunk(
+                "models.py",
+                1,
+                15,
+                "class User:\n    email = ''\n    password_hash = ''\n",
+            ),
+            _chunk(
+                "routes.py",
+                1,
+                8,
+                "def get_profile(user_id):\n    return db.fetch(user_id)\n",
+            ),
         ]
         return SearchIndex.from_chunks(chunks)
 
@@ -110,10 +120,12 @@ class TestTopK:
         assert len(results) <= 10
 
     def test_top_k_exceeding_corpus_returns_all(self):
-        idx = SearchIndex.from_chunks([
-            _chunk("a.py", 1, 5, "login function"),
-            _chunk("b.py", 1, 5, "login handler"),
-        ])
+        idx = SearchIndex.from_chunks(
+            [
+                _chunk("a.py", 1, 5, "login function"),
+                _chunk("b.py", 1, 5, "login handler"),
+            ]
+        )
         results = idx.search("login", k=100)
         assert len(results) == 2
 
@@ -134,17 +146,17 @@ class TestBM25Scoring:
         assert results[0].chunk_id == "a.py:1-10"
 
     def test_scores_are_positive(self):
-        idx = SearchIndex.from_chunks([
-            _chunk("a.py", 1, 5, "authentication login password"),
-        ])
+        idx = SearchIndex.from_chunks(
+            [
+                _chunk("a.py", 1, 5, "authentication login password"),
+            ]
+        )
         results = idx.search("login")
         assert results[0].score > 0.0
 
     def test_rare_term_scores_higher_than_common(self):
         """Less frequent term (higher IDF) should score higher."""
-        chunks = [
-            _chunk(f"common{i}.py", 1, 5, "user function") for i in range(10)
-        ]
+        chunks = [_chunk(f"common{i}.py", 1, 5, "user function") for i in range(10)]
         # Add one chunk with a rare term alongside 'user'
         chunks.append(_chunk("special.py", 1, 5, "user xyzzy_rare_token"))
         idx = SearchIndex.from_chunks(chunks)
@@ -160,7 +172,9 @@ class TestBM25Scoring:
 class TestSubstringFallback:
     def test_exact_symbol_no_tokenise_match_falls_back(self):
         """Queries with camelCase or symbols not split by tokeniser fall back."""
-        chunk = _chunk("service.py", 1, 5, "function getUserById(id) { return db.findUser(id); }")
+        chunk = _chunk(
+            "service.py", 1, 5, "function getUserById(id) { return db.findUser(id); }"
+        )
         idx = SearchIndex.from_chunks([chunk])
         # 'getUser' doesn't tokenize cleanly as a single token with the current tokeniser
         # but substring match should still find it
@@ -176,10 +190,12 @@ class TestSubstringFallback:
 
     def test_no_fallback_when_bm25_finds_results(self):
         """If BM25 returns results, we should not see zero-score fallback results."""
-        idx = SearchIndex.from_chunks([
-            _chunk("a.py", 1, 5, "login user password"),
-            _chunk("b.py", 1, 5, "something unrelated"),
-        ])
+        idx = SearchIndex.from_chunks(
+            [
+                _chunk("a.py", 1, 5, "login user password"),
+                _chunk("b.py", 1, 5, "something unrelated"),
+            ]
+        )
         results = idx.search("login")
         # All returned results should have positive BM25 score
         for r in results:
@@ -250,7 +266,9 @@ class TestIncrementalIngestion:
 class TestMultiTermQueries:
     def test_multi_term_query_returns_best_matching_chunk(self):
         chunks = [
-            _chunk("auth.py", 1, 10, "def login(user, password): verify_password(password)"),
+            _chunk(
+                "auth.py", 1, 10, "def login(user, password): verify_password(password)"
+            ),
             _chunk("utils.py", 1, 5, "def hash_password(raw): return bcrypt(raw)"),
             _chunk("models.py", 1, 8, "class Session: user_id = 0"),
         ]

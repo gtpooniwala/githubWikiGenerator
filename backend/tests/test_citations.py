@@ -16,9 +16,7 @@ def _resolve(md: str) -> str:
 
 
 def _url(path: str, start: int, end: int) -> str:
-    return (
-        f"https://github.com/{OWNER}/{REPO}/blob/{SHA}/{path}#L{start}-L{end}"
-    )
+    return f"https://github.com/{OWNER}/{REPO}/blob/{SHA}/{path}#L{start}-L{end}"
 
 
 # ---------------------------------------------------------------------------
@@ -36,7 +34,10 @@ def test_simple_citation_resolved():
 def test_citation_with_nested_path():
     md = "Entry point: [backend/src/main.py:1-5]"
     result = _resolve(md)
-    assert f"(https://github.com/{OWNER}/{REPO}/blob/{SHA}/backend/src/main.py#L1-L5)" in result
+    assert (
+        f"(https://github.com/{OWNER}/{REPO}/blob/{SHA}/backend/src/main.py#L1-L5)"
+        in result
+    )
 
 
 def test_citation_single_line_range():
@@ -47,9 +48,7 @@ def test_citation_single_line_range():
 
 
 def test_multiple_citations_in_document():
-    md = (
-        "Auth is here [auth.py:1-10] and the model [models.py:20-30] wraps it."
-    )
+    md = "Auth is here [auth.py:1-10] and the model [models.py:20-30] wraps it."
     result = _resolve(md)
     assert f"[auth.py:1-10]({_url('auth.py', 1, 10)})" in result
     assert f"[models.py:20-30]({_url('models.py', 20, 30)})" in result

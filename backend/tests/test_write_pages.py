@@ -126,8 +126,14 @@ def test_citations_resolved_in_content_md():
     feat = _feature()
     pack = _pack("auth", [_chunk("auth.py", 1, 10), _chunk("models.py", 5, 15)])
     result = write_feature_page(feat, pack, OWNER, REPO, SHA)
-    assert f"https://github.com/{OWNER}/{REPO}/blob/{SHA}/auth.py#L1-L10" in result.content_md
-    assert f"https://github.com/{OWNER}/{REPO}/blob/{SHA}/models.py#L5-L15" in result.content_md
+    assert (
+        f"https://github.com/{OWNER}/{REPO}/blob/{SHA}/auth.py#L1-L10"
+        in result.content_md
+    )
+    assert (
+        f"https://github.com/{OWNER}/{REPO}/blob/{SHA}/models.py#L5-L15"
+        in result.content_md
+    )
 
 
 def test_content_md_with_no_citations_returned_as_is():

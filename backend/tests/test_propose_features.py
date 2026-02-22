@@ -27,7 +27,10 @@ from services.signals import EntryPoint, ReadingHeading, RepoSignals, RouteSigna
 
 
 def _snapshot(files: list[str] | None = None) -> RepoSnapshot:
-    file_list = [FileEntry(path=p, size=100, content="") for p in (files or ["src/app.py", "src/auth.py"])]
+    file_list = [
+        FileEntry(path=p, size=100, content="")
+        for p in (files or ["src/app.py", "src/auth.py"])
+    ]
     return RepoSnapshot(
         owner="acme",
         repo="myapp",
@@ -49,8 +52,12 @@ def _signals(
     return RepoSignals(readme_headings=rh, routes=rs, entrypoints=[])
 
 
-def _proposal(id_: str, title: str, desc: str = "A feature.", paths: list[str] | None = None) -> FeatureProposal:
-    return FeatureProposal(id=id_, title=title, description=desc, seed_paths=paths or [])
+def _proposal(
+    id_: str, title: str, desc: str = "A feature.", paths: list[str] | None = None
+) -> FeatureProposal:
+    return FeatureProposal(
+        id=id_, title=title, description=desc, seed_paths=paths or []
+    )
 
 
 def _proposal_list(*proposals: FeatureProposal) -> FeatureProposalList:
@@ -120,7 +127,11 @@ class TestBuildContext:
         assert "50 more files" in ctx
 
     def test_entrypoints_included(self):
-        signals = RepoSignals(entrypoints=[EntryPoint(kind="npm-script", name="start", command="node index.js")])
+        signals = RepoSignals(
+            entrypoints=[
+                EntryPoint(kind="npm-script", name="start", command="node index.js")
+            ]
+        )
         ctx = _build_context(_snapshot(), signals)
         assert "start" in ctx
         assert "node index.js" in ctx
@@ -172,7 +183,9 @@ class TestProposeFeaturesHappyPath:
         assert result.features[0].seed_paths == paths
 
     def test_description_preserved(self):
-        proposals = [_proposal("auth", "User Authentication", desc="Users can log in securely.")]
+        proposals = [
+            _proposal("auth", "User Authentication", desc="Users can log in securely.")
+        ]
         with self._mock_llm(proposals):
             result = propose_features(_snapshot(), RepoSignals())
         assert result.features[0].description == "Users can log in securely."
@@ -217,7 +230,10 @@ class TestBannedWordFiltering:
         assert all(f.title != "Backend" for f in result.features)
 
     def test_banned_word_components_filtered(self):
-        proposals = [_proposal("comp", "UI Components"), _proposal("onboard", "User Onboarding")]
+        proposals = [
+            _proposal("comp", "UI Components"),
+            _proposal("onboard", "User Onboarding"),
+        ]
         with self._mock_llm(proposals):
             result = propose_features(_snapshot(), RepoSignals())
         assert all("Components" not in f.title for f in result.features)
@@ -240,7 +256,14 @@ class TestBannedWordFiltering:
         assert result.features == []
 
     def test_banned_words_set_contains_expected_words(self):
-        for word in ("utils", "helpers", "frontend", "backend", "components", "middleware"):
+        for word in (
+            "utils",
+            "helpers",
+            "frontend",
+            "backend",
+            "components",
+            "middleware",
+        ):
             assert word in BANNED_TITLE_WORDS
 
 
@@ -252,13 +275,17 @@ class TestBannedWordFiltering:
 class TestLLMCallContract:
     def test_llm_called_once(self):
         proposals = [_proposal("auth", "User Authentication")]
-        with patch("services.llm.chat_json", return_value=_proposal_list(*proposals)) as mock_llm:
+        with patch(
+            "services.llm.chat_json", return_value=_proposal_list(*proposals)
+        ) as mock_llm:
             propose_features(_snapshot(), RepoSignals())
         mock_llm.assert_called_once()
 
     def test_llm_called_with_feature_proposal_list_schema(self):
         proposals = [_proposal("auth", "User Auth")]
-        with patch("services.llm.chat_json", return_value=_proposal_list(*proposals)) as mock_llm:
+        with patch(
+            "services.llm.chat_json", return_value=_proposal_list(*proposals)
+        ) as mock_llm:
             propose_features(_snapshot(), RepoSignals())
         _, call_args, _ = mock_llm.mock_calls[0]
         # Third positional argument is the schema
@@ -266,7 +293,9 @@ class TestLLMCallContract:
 
     def test_context_contains_repo_name_in_user_message(self):
         proposals = [_proposal("auth", "User Auth")]
-        with patch("services.llm.chat_json", return_value=_proposal_list(*proposals)) as mock_llm:
+        with patch(
+            "services.llm.chat_json", return_value=_proposal_list(*proposals)
+        ) as mock_llm:
             propose_features(_snapshot(), RepoSignals())
         user_msg = mock_llm.call_args[0][1]
         assert "acme/myapp" in user_msg
