@@ -1,25 +1,57 @@
-"""Builds a RepoSnapshot by fetching tree + file contents from GitHub."""
+"""Builds a RepoSnapshot by fetching tree + file contents from GitHub.
+
+Concurrency & rate-limit notes
+-------------------------------
+* Files are fetched in parallel using a small thread pool
+  (``_FETCH_WORKERS`` = 5).  Five concurrent GET requests is well within
+  GitHub's secondary-rate-limit guidance (≤ 90 requests/minute authenticated)
+  while still giving a large speed-up over sequential fetching.
+* Rate-limit handling (429 / 403 + Retry-After) is implemented inside
+  ``github_client._get`` — individual workers will sleep and retry
+  automatically rather than dropping files.
+* Only genuine file-not-found / encoding errors are silently skipped;
+  rate-limit errors are always retried (up to ``_MAX_RETRIES`` attempts)
+  before they propagate and abort the pipeline with a clear message.
+"""
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import httpx
 
 from services import github_client
 from services.file_filter import should_include
 from models.repo_snapshot import FileEntry, RepoSnapshot
 
-# Fetch up to this many files in parallel.  High enough to be fast; low
-# enough not to overwhelm the GitHub API or trigger secondary-rate-limits.
-_FETCH_WORKERS = 10
+# Five workers: fast enough for most repos (150 files ≈ 15 s even at 0.5 s/file)
+# while staying well below GitHub's secondary rate-limit threshold.
+_FETCH_WORKERS = 5
+
+# HTTP status codes that mean "this file simply isn't available" —
+# we skip these silently.  Everything else (including 429 rate limits,
+# which github_client retries automatically) is re-raised.
+_SKIP_STATUSES = {403, 404, 451}  # 451 = legal / DMCA takedown
 
 
 def _fetch_one(
     owner: str, repo: str, path: str, size: int, commit_sha: str
 ) -> FileEntry | None:
-    """Download a single file; return None on any error."""
+    """Download a single file.
+
+    Returns:
+        A populated ``FileEntry`` on success, or ``None`` if the file is
+        unavailable (404 / 403 / encoding error).  Rate-limit errors are
+        handled transparently by the underlying HTTP client and will
+        sleep-and-retry rather than returning ``None``.
+    """
     try:
         content = github_client.get_file(owner, repo, path, commit_sha)
         return FileEntry(path=path, size=size, content=content)
-    except Exception:
-        return None
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in _SKIP_STATUSES:
+            return None  # file unavailable — skip silently
+        raise  # rate-limit / server error — propagate so the pipeline fails loudly
+    except (UnicodeDecodeError, ValueError):
+        return None  # binary content that slipped through the filter
 
 
 def load_snapshot(owner: str, repo: str) -> RepoSnapshot:
