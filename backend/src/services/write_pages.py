@@ -35,18 +35,24 @@ Your task is to write a clear, well-structured wiki page for a single \
 user-facing feature.  The page is aimed at developers who want to understand \
 how the feature works and where to find the relevant code.
 
-Guidelines:
-1. Target audience: engineers reading the docs, not end users.
-2. Structure: start with a 1-2 sentence overview, then explain how the \
-feature is implemented, then list key entry points / public interfaces.
-3. Cite every non-trivial claim using the chunk citation format: \
-[path/to/file.ext:start_line-end_line].  Use the EXACT chunk IDs provided.
-4. Write in plain markdown.  Use ## for section headings.  No title heading \
-(it is added separately).
-5. Do NOT invent file paths or line numbers.  Only cite chunk IDs you can \
-see in the evidence below.
-6. Do NOT include a table of contents.
-7. Keep the page concise: 200-600 words of prose, supplemented by citations.
+Formatting rules (follow exactly):
+1. No title heading — it is added separately.
+2. Use ## for top-level section headings and ### for sub-sections.  \
+Leave a blank line before and after every heading.
+3. Write paragraphs of 2-3 sentences.  Leave a blank line between paragraphs.
+4. **Bold** key terms, function names, class names, and file names on first \
+mention within a section.
+5. Use bullet lists (- item) for enumerations.  Leave a blank line before \
+and after every list.  No more than two levels of nesting.
+6. Fenced code blocks must include a language tag (e.g. ```python, \
+```typescript, ```bash).  Leave a blank line before and after every code block.
+7. Do NOT include a table of contents.
+8. Keep to 250-600 words of prose, supplemented by citations.
+
+Citation rules:
+- Cite every non-trivial claim using [path/to/file.ext:start_line-end_line].
+- Use the EXACT chunk IDs provided in the evidence.  Never invent paths or \
+line numbers.
 """
 
 # Maximum characters of chunk text to include in the prompt per chunk.
@@ -180,18 +186,30 @@ _OVERVIEW_SYSTEM = """\
 You are a senior technical writer creating the overview page for a software \
 repository wiki.
 
-Write a concise, developer-facing overview in plain markdown covering:
-1. **What this project does** — a 2-3 sentence summary for engineers.
-2. **High-level architecture** — key components and how they relate.
-3. **How to run / get started** — installation and quickstart steps if \
-evident from the files.
+Write a concise, developer-facing overview in plain markdown with these \
+three sections:
 
-Guidelines:
-- Target audience: engineers, not end users.
-- Use ## for section headings.  Do NOT add a title heading.
-- Cite every nontrivial claim using the chunk citation format: \
-[path/to/file.ext:start_line-end_line].  Only cite files shown below.
-- Do NOT invent file paths or line numbers.
+## What this project does
+A 2-3 sentence summary of purpose and audience for engineers.
+
+## Architecture
+Key components, services, or layers and how they connect.  \
+Use ### sub-sections if there are clearly distinct subsystems.
+
+## Getting started
+Installation and quickstart steps if evident from the files.  \
+Use a numbered list and fenced code blocks with a language tag for commands.
+
+Formatting rules (follow exactly):
+- No title heading — use only ## and ### headings.  \
+Leave a blank line before and after every heading.
+- Paragraphs: 2-3 sentences, separated by a blank line.
+- **Bold** key component names, file names, and commands on first mention.
+- Bullet or numbered lists: leave a blank line before and after every list.
+- Fenced code blocks: always include a language tag (e.g. ```bash, \
+```python).  Leave a blank line before and after every code block.
+- Cite every non-trivial claim using [path/to/file.ext:start_line-end_line].  \
+Only cite files shown below.  Never invent paths or line numbers.
 - Keep to 200-500 words of prose.
 """
 
