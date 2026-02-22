@@ -22,7 +22,7 @@ This doc focuses on pipeline logic and documentation quality:
 - Citation correctness and trust
 - Architectural alternatives and tradeoffs
 
-Operational concerns (parallelization, caching, queueing, autoscaling) are still important, but are treated as secondary here.
+Operational concerns (parallelization, caching, queueing, autoscaling) are still important, but not the focus of this document.
 
 ---
 
@@ -284,8 +284,9 @@ These are ranked by impact-to-complexity.
    - Better semantic recall without immediate full vector-stack commitment
 
 10. **Graph-RAG architecture**
-   - Combine graph traversal with embedding retrieval over node/chunk representations
-   - Powerful but operationally heavy; only justify for large/polyglot repos and stricter quality targets
+
+  - Combine graph traversal with embedding retrieval over node/chunk representations
+  - Powerful but operationally heavy; only justify for large/polyglot repos and stricter quality targets
 
 ---
 
