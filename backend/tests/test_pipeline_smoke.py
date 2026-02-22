@@ -65,7 +65,11 @@ _FAKE_SNAPSHOT = RepoSnapshot(
     files=[
         FileEntry(path="README.md", size=len(_README_CONTENT), content=_README_CONTENT),
         FileEntry(path="main.py", size=len(_MAIN_CONTENT), content=_MAIN_CONTENT),
-        FileEntry(path="pyproject.toml", size=len(_PYPROJECT_CONTENT), content=_PYPROJECT_CONTENT),
+        FileEntry(
+            path="pyproject.toml",
+            size=len(_PYPROJECT_CONTENT),
+            content=_PYPROJECT_CONTENT,
+        ),
     ],
 )
 
@@ -98,7 +102,9 @@ _FEATURES_JSON = json.dumps(
         ]
     }
 )
-_FEATURE_PAGE_MD = "## Overview\n\nThis feature provides widget CRUD.\n\nSee [main.py:1-10]."
+_FEATURE_PAGE_MD = (
+    "## Overview\n\nThis feature provides widget CRUD.\n\nSee [main.py:1-10]."
+)
 _OVERVIEW_MD = "## What\n\nWidget is a FastAPI app.\n\nSee [README.md:1-3]."
 
 
@@ -144,7 +150,10 @@ def reset_llm_client():
         ("https://github.com/owner/repo", ("owner", "repo")),
         ("https://github.com/owner/repo/", ("owner", "repo")),
         ("https://github.com/owner/repo.git", ("owner", "repo")),
-        ("https://www.github.com/org/my-project", None),  # www prefix not matched — invalid
+        (
+            "https://www.github.com/org/my-project",
+            None,
+        ),  # www prefix not matched — invalid
         ("http://github.com/user/proj", ("user", "proj")),
         ("https://github.com/Meta-Inc/llama.cpp", ("Meta-Inc", "llama.cpp")),
     ],

@@ -1,9 +1,12 @@
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 
 import config
 from main import app
-from models.schemas import GenerateResponse
+from models.schemas import GenerateResponse, WikiFeature
+from services.pipeline import _parse_owner_repo
 
 client = TestClient(app)
 
@@ -13,6 +16,30 @@ _TEST_KEY = "test-only-key"
 @pytest.fixture(autouse=True)
 def patch_api_key(monkeypatch):
     monkeypatch.setattr(config, "API_KEY", _TEST_KEY)
+
+
+def _stub_pipeline(repo_url: str) -> GenerateResponse:
+    """Minimal pipeline stand-in that returns a schema-valid response."""
+    owner, repo = _parse_owner_repo(str(repo_url))
+    return GenerateResponse(
+        repo_id=f"{owner}/{repo}",
+        commit_sha="test-sha-123",
+        overview_md=f"# {owner}/{repo}\n\nTest overview.",
+        features=[
+            WikiFeature(
+                id="test-feature",
+                title="Test Feature",
+                description="A test feature description.",
+                content_md="Test content.",
+            )
+        ],
+    )
+
+
+@pytest.fixture(autouse=True)
+def patch_pipeline():
+    with patch("routers.generate.run_pipeline", side_effect=_stub_pipeline):
+        yield
 
 
 HEADERS = {"x-api-key": _TEST_KEY}

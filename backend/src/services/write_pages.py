@@ -199,7 +199,9 @@ Guidelines:
 def _is_overview_file(path: str) -> bool:
     """Return ``True`` if *path* should be included in the overview evidence."""
     fname = path.rsplit("/", 1)[-1].lower()
-    return fname in _README_NAMES or fname in _MANIFEST_NAMES or fname in _ENTRYPOINT_NAMES
+    return (
+        fname in _README_NAMES or fname in _MANIFEST_NAMES or fname in _ENTRYPOINT_NAMES
+    )
 
 
 def _gather_overview_files(snapshot: RepoSnapshot) -> list[FileEntry]:

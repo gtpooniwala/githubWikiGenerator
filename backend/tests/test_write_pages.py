@@ -376,7 +376,9 @@ def test_overview_prompt_contains_readme_content():
 def test_overview_prompt_contains_package_json():
     mock = _mock_client("Overview.")
     _set_client(mock)
-    snap = _snapshot([_file("package.json", '{"name":"myapp","scripts":{"start":"node index.js"}}')])
+    snap = _snapshot(
+        [_file("package.json", '{"name":"myapp","scripts":{"start":"node index.js"}}')]
+    )
     write_overview_page(snap, OWNER, REPO, SHA)
     call_args = mock.chat.completions.create.call_args
     messages = call_args.kwargs["messages"]
@@ -412,11 +414,13 @@ def test_overview_non_overview_files_excluded():
     """Implementation files not in the evidence set should not appear in prompt."""
     mock = _mock_client("Overview.")
     _set_client(mock)
-    snap = _snapshot([
-        _file("README.md", "Docs."),
-        _file("src/utils/helpers.py", "def helper(): pass"),
-        _file("src/db/models.py", "class User: pass"),
-    ])
+    snap = _snapshot(
+        [
+            _file("README.md", "Docs."),
+            _file("src/utils/helpers.py", "def helper(): pass"),
+            _file("src/db/models.py", "class User: pass"),
+        ]
+    )
     write_overview_page(snap, OWNER, REPO, SHA)
     call_args = mock.chat.completions.create.call_args
     messages = call_args.kwargs["messages"]
@@ -454,7 +458,9 @@ def test_overview_nested_entrypoint_included():
     """Entrypoint files in subdirectories are still included."""
     mock = _mock_client("Overview.")
     _set_client(mock)
-    snap = _snapshot([_file("src/app.py", "from fastapi import FastAPI\napp = FastAPI()")])
+    snap = _snapshot(
+        [_file("src/app.py", "from fastapi import FastAPI\napp = FastAPI()")]
+    )
     write_overview_page(snap, OWNER, REPO, SHA)
     call_args = mock.chat.completions.create.call_args
     messages = call_args.kwargs["messages"]

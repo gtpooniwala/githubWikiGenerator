@@ -2,12 +2,13 @@ import asyncio
 import json
 from typing import AsyncIterator
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from auth import require_api_key
-from models.schemas import GenerateRequest, GenerateResponse, WikiFeature
+from models.schemas import GenerateRequest, GenerateResponse
 from services.chunker import chunk_file
+from services.pipeline import run_pipeline
 from services.repo_loader import load_snapshot
 from services.signals import (
     RepoSignals,
@@ -124,18 +125,8 @@ async def generate_stream(
 
 @router.post("/generate", response_model=GenerateResponse)
 def generate(body: GenerateRequest, _: None = Depends(require_api_key)):
-    """Stub endpoint — real pipeline implemented in later steps."""
-    repo_id = _parse_repo_id(str(body.repo_url))
-    return GenerateResponse(
-        repo_id=repo_id,
-        commit_sha="stub-sha",
-        overview_md=f"# {repo_id}\n\nStub overview — real content coming soon.",
-        features=[
-            WikiFeature(
-                id="stub-feature",
-                title="Stub Feature",
-                description="This is a stub feature.",
-                content_md="Stub content — real wiki pages coming soon.",
-            )
-        ],
-    )
+    """Run the full wiki-generation pipeline and return the result."""
+    try:
+        return run_pipeline(str(body.repo_url))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

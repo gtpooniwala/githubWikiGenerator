@@ -1,8 +1,11 @@
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 
 import config
 from main import app
+from models.schemas import GenerateResponse, WikiFeature
 
 GENERATE_URL = "/api/generate"
 VALID_BODY = {"repo_url": "https://github.com/owner/repo"}
@@ -15,6 +18,27 @@ _TEST_KEY = "test-only-key"
 @pytest.fixture(autouse=True)
 def patch_api_key(monkeypatch):
     monkeypatch.setattr(config, "API_KEY", _TEST_KEY)
+
+
+_STUB_RESPONSE = GenerateResponse(
+    repo_id="owner/repo",
+    commit_sha="stub-sha",
+    overview_md="Overview.",
+    features=[
+        WikiFeature(
+            id="f1",
+            title="Feature One",
+            description="Desc.",
+            content_md="Content.",
+        )
+    ],
+)
+
+
+@pytest.fixture(autouse=True)
+def patch_pipeline():
+    with patch("routers.generate.run_pipeline", return_value=_STUB_RESPONSE):
+        yield
 
 
 client = TestClient(app)
