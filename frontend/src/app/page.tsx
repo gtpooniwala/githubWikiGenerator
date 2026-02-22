@@ -291,8 +291,18 @@ export default function Home() {
       setLoading(false);
     });
 
+    // Fallback: connection dropped without a proper SSE error event
+    // (e.g. Cloud Run timeout, network blip, container OOM).
+    // EventSource automatically retries on CONNECTING state, so only
+    // treat CLOSED as a fatal error.
     es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) setLoading(false);
+      if (es.readyState === EventSource.CLOSED) {
+        setError(
+          'Connection closed unexpectedly — the generation may have taken too long or the server ran out of memory. ' +
+          'Try a smaller repository, or try again.'
+        );
+        setLoading(false);
+      }
     };
   }, []);
 
