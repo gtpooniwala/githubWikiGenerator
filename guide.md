@@ -97,7 +97,7 @@ Step X: <short name>
 
 ### Next Step
 
-**STEP 8: Backend – File-level Import Graph** (`services/import_graph.py`)
+**STEP 8: Frontend – Proxy `/api/generate` Route + UI MVP + Real-time Status**
 
 ### Deployment
 
@@ -161,11 +161,13 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 
 ### Items Pending ❗
 
-* Steps 8–21: full pipeline from import graph → LLM → wiki assembly → frontend UI
-* CI test gating (Step 20)
-* Frontend full UI (Step 18–19)
-* Frontend/backend compatibility check (route.ts bug above)
-* Documentation of final product and architecture
+* **Step 8** – Frontend proxy route (tests + Vitest setup) — `route.ts` body-fix already applied ✅
+* **Step 9** – Frontend UI MVP (form, markdown render)
+* **Step 10** – Frontend real-time status via SSE (backend stub + frontend stream consumer)
+* **Steps 11–19** – Backend pipeline: import graph → search index → LLM → evidence → page writing → pipeline orchestrator → wire endpoints
+* **Step 20** – CI test gating
+* **Step 21** – Navigable wiki pages
+* **Step 22** – Final deploy + smoke checks
 
 ---
 
