@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { generateWiki, GenerateResponse } from '@/lib/api';
+import { checkHealth as apiCheckHealth, generateWiki, GenerateResponse } from '@/lib/api';
 import { RepoForm } from '@/components/RepoForm';
 import { WikiViewer } from '@/components/WikiViewer';
 
@@ -25,16 +25,29 @@ function parseStatusDetail(event: string, data: Record<string, unknown>): string
   return undefined;
 }
 
+type HealthStatus = 'idle' | 'checking' | 'healthy' | 'unhealthy';
+
 export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wikiData, setWikiData] = useState<GenerateResponse | null>(null);
   const [statusMessages, setStatusMessages] = useState<StatusMessage[]>([]);
+  const [healthStatus, setHealthStatus] = useState<HealthStatus>('idle');
 
-  // Warm-up: silent health check on mount so Cloud Run cold-start resolves early
-  useEffect(() => {
-    fetch('/api/health').catch(() => {});
+  const checkHealth = useCallback(async () => {
+    setHealthStatus('checking');
+    try {
+      const data = await apiCheckHealth();
+      setHealthStatus(data?.status === 'healthy' ? 'healthy' : 'unhealthy');
+    } catch {
+      setHealthStatus('unhealthy');
+    }
   }, []);
+
+  // Auto-check health on mount (also warms up Cloud Run cold-start)
+  useEffect(() => {
+    checkHealth();
+  }, [checkHealth]);
 
   const handleGenerate = useCallback(async (repoUrl: string) => {
     setLoading(true);
@@ -76,6 +89,43 @@ export default function Home() {
           <div>
             <h1 className="text-lg font-bold text-slate-900 leading-none">Wiki Generator</h1>
             <p className="text-xs text-slate-500 mt-0.5">Instant docs for any public GitHub repo</p>
+          </div>
+
+          {/* Health check — pushed to top-right */}
+          <div className="ml-auto flex items-center gap-2">
+            {/* Status indicator */}
+            {healthStatus !== 'idle' && (
+              <span
+                aria-label={`Backend status: ${healthStatus}`}
+                className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full border ${
+                  healthStatus === 'checking'
+                    ? 'bg-slate-50 border-slate-200 text-slate-400'
+                    : healthStatus === 'healthy'
+                    ? 'bg-green-50 border-green-200 text-green-700'
+                    : 'bg-red-50 border-red-200 text-red-600'
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    healthStatus === 'checking'
+                      ? 'bg-slate-300 animate-pulse'
+                      : healthStatus === 'healthy'
+                      ? 'bg-green-500'
+                      : 'bg-red-500'
+                  }`}
+                />
+                {healthStatus === 'checking' ? 'Checking…' : healthStatus === 'healthy' ? 'Backend healthy' : 'Backend unreachable'}
+              </span>
+            )}
+
+            <button
+              onClick={checkHealth}
+              disabled={healthStatus === 'checking'}
+              aria-label="Check backend health"
+              className="text-xs font-medium px-3 py-1.5 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {healthStatus === 'checking' ? 'Checking…' : 'Check health'}
+            </button>
           </div>
         </div>
       </header>
