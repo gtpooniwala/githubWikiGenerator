@@ -5,10 +5,31 @@ import { generateWiki, GenerateResponse } from '@/lib/api';
 import { RepoForm } from '@/components/RepoForm';
 import { WikiViewer } from '@/components/WikiViewer';
 
+const SSE_EVENTS = ['repo_loaded', 'chunked', 'signals_extracted', 'features_proposed', 'pages_written', 'done'] as const;
+
+interface StatusMessage {
+  label: string;
+  detail?: string;
+}
+
+function parseStatusDetail(event: string, data: Record<string, unknown>): string | undefined {
+  if (event === 'repo_loaded' && data.file_count != null) return `${data.file_count} files · commit ${String(data.commit_sha ?? '').slice(0, 7)}`;
+  if (event === 'chunked' && data.chunk_count != null) return `${data.chunk_count} chunks`;
+  if (event === 'signals_extracted') {
+    const parts = [];
+    if (data.routes) parts.push(`${data.routes} routes`);
+    if (data.headings) parts.push(`${data.headings} headings`);
+    if (data.entrypoints) parts.push(`${data.entrypoints} entrypoints`);
+    return parts.length ? parts.join(' · ') : undefined;
+  }
+  return undefined;
+}
+
 export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wikiData, setWikiData] = useState<GenerateResponse | null>(null);
+  const [statusMessages, setStatusMessages] = useState<StatusMessage[]>([]);
 
   // Warm-up: silent health check on mount so Cloud Run cold-start resolves early
   useEffect(() => {
@@ -19,12 +40,29 @@ export default function Home() {
     setLoading(true);
     setError(null);
     setWikiData(null);
+    setStatusMessages([]);
+
+    // Open SSE stream for live progress updates
+    const es = new EventSource(`/api/generate/stream?repo_url=${encodeURIComponent(repoUrl)}`);
+    SSE_EVENTS.forEach((eventName) => {
+      es.addEventListener(eventName, (e: MessageEvent) => {
+        let parsed: Record<string, unknown> = {};
+        try { parsed = JSON.parse(e.data); } catch { /* ignore */ }
+        setStatusMessages((prev) => [
+          ...prev,
+          { label: String(parsed.message ?? eventName), detail: parseStatusDetail(eventName, parsed) },
+        ]);
+      });
+    });
+    es.onerror = () => es.close();
+
     try {
       const data = await generateWiki(repoUrl);
       setWikiData(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
     } finally {
+      es.close();
       setLoading(false);
     }
   }, []);
@@ -73,13 +111,28 @@ export default function Home() {
           <div
             role="status"
             aria-label="Generating wiki"
-            className="mt-10 flex flex-col items-center gap-3 text-slate-500"
+            className="mt-10 flex flex-col items-center gap-4 text-slate-500"
           >
             <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
-            <p className="text-sm">Analyzing repository and generating wiki…</p>
+            {statusMessages.length > 0 ? (
+              <ul className="space-y-1 text-center">
+                {statusMessages.map((msg, i) => (
+                  <li
+                    key={i}
+                    className={`text-sm ${i === statusMessages.length - 1 ? 'text-blue-600 font-medium' : 'text-slate-400'}`}
+                  >
+                    {i === statusMessages.length - 1 ? '▶ ' : '✓ '}
+                    {msg.label}
+                    {msg.detail && <span className="ml-1 opacity-70">({msg.detail})</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm">Analyzing repository and generating wiki…</p>
+            )}
           </div>
         )}
       </section>

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { GenerateResponse } from '@/lib/api';
 
 // Mock the api module (used by page.tsx)
 vi.mock('@/lib/api', () => ({
@@ -13,9 +14,37 @@ import { generateWiki } from '@/lib/api';
 import Home from '../src/app/page';
 import { RepoForm } from '../src/components/RepoForm';
 
+// ---------------------------------------------------------------------------
+// Minimal EventSource mock — jsdom doesn't include EventSource
+// ---------------------------------------------------------------------------
+class MockEventSource {
+  static instances: MockEventSource[] = [];
+  url: string;
+  onerror: (() => void) | null = null;
+  private listeners: Record<string, Array<(e: { data: string }) => void>> = {};
+
+  constructor(url: string) {
+    this.url = url;
+    MockEventSource.instances.push(this);
+  }
+
+  addEventListener(event: string, handler: (e: { data: string }) => void) {
+    if (!this.listeners[event]) this.listeners[event] = [];
+    this.listeners[event].push(handler);
+  }
+
+  emit(event: string, data: Record<string, unknown> = {}) {
+    this.listeners[event]?.forEach((h) => h({ data: JSON.stringify(data) }));
+  }
+
+  close() {}
+}
+
 // Silence real fetch calls (warm-up health check)
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 200 })));
+  vi.stubGlobal('EventSource', MockEventSource);
+  MockEventSource.instances = [];
   vi.clearAllMocks();
 });
 
@@ -139,5 +168,30 @@ describe('Home page', () => {
     });
 
     expect(screen.getByRole('alert')).toHaveTextContent('Network error');
+  });
+
+  it('displays SSE status messages as events arrive', async () => {
+    const user = userEvent.setup();
+
+    // generateWiki never resolves so we stay in the loading state
+    vi.mocked(generateWiki).mockReturnValue(new Promise(() => {}));
+
+    render(<Home />);
+
+    const input = screen.getByRole('textbox', { name: /github repository url/i });
+    await user.type(input, 'https://github.com/owner/repo');
+    await user.click(screen.getByRole('button', { name: /generate wiki/i }));
+
+    // Retrieve the MockEventSource created during handleGenerate
+    const es = MockEventSource.instances[0];
+    expect(es).toBeDefined();
+    expect(es.url).toContain('repo_url=');
+    expect(es.url).toContain(encodeURIComponent('https://github.com/owner/repo'));
+
+    act(() => es.emit('repo_loaded', { message: 'Repository loaded' }));
+    await waitFor(() => expect(screen.getByText(/repository loaded/i)).toBeInTheDocument());
+
+    act(() => es.emit('chunked', { message: 'Files chunked' }));
+    await waitFor(() => expect(screen.getByText(/files chunked/i)).toBeInTheDocument());
   });
 });
