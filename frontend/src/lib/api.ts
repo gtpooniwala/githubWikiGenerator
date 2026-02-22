@@ -4,10 +4,18 @@ export interface HealthResponse {
   status: string;
 }
 
+export interface WikiFeature {
+  id: string;
+  title: string;
+  description: string;
+  content_md: string;
+}
+
 export interface GenerateResponse {
-  repo: string;
-  status: string;
-  message: string;
+  repo_id: string;
+  commit_sha: string;
+  overview_md: string;
+  features: WikiFeature[];
 }
 
 export async function checkHealth(): Promise<HealthResponse> {

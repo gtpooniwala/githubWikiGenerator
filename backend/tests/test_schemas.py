@@ -35,6 +35,10 @@ def test_response_repo_id_parsed_correctly():
     cases = [
         ("https://github.com/owner/repo", "owner/repo"),
         ("https://github.com/owner/repo/", "owner/repo"),
+        ("https://github.com/owner/repo.git", "owner/repo"),
+        # Repos whose names end in chars that rstrip(".git") would wrongly strip
+        ("https://github.com/owner/light", "owner/light"),
+        ("https://github.com/owner/digit", "owner/digit"),
     ]
     for url, expected_repo_id in cases:
         response = client.post("/api/generate", json={"repo_url": url}, headers=HEADERS)

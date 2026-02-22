@@ -9,10 +9,12 @@ router = APIRouter(prefix="/api")
 def _parse_repo_id(repo_url: str) -> str:
     """Extract 'owner/repo' from a GitHub URL."""
     # Works for https://github.com/owner/repo and https://github.com/owner/repo.git
-    parts = str(repo_url).rstrip("/").rstrip(".git").split("github.com/")
+    # Use removesuffix (not rstrip) to avoid stripping individual characters.
+    url = str(repo_url).removesuffix("/").removesuffix(".git").removesuffix("/")
+    parts = url.split("github.com/")
     if len(parts) != 2:
         raise ValueError(f"Cannot parse repo_id from URL: {repo_url}")
-    return parts[1].rstrip(".git")
+    return parts[1]
 
 
 @router.post("/generate", response_model=GenerateResponse)

@@ -12,7 +12,7 @@ env:
   PROJECT_ID: pushstart-481717
   SERVICE_NAME: wiki-generator-frontend
   REGION: us-central1
-  BACKEND_URL: https://wiki-generator-backend-254204084242.us-central1.run.app
+  BACKEND_URL: https://wiki-generator-backend-ud74aktrjq-uc.a.run.app
 
 jobs:
   deploy:
@@ -44,7 +44,8 @@ jobs:
           gcloud run deploy $SERVICE_NAME \
             --source . \
             --region $REGION \
-            --set-env-vars "BACKEND_URL=https://wiki-generator-backend-254204084242.us-central1.run.app,BACKEND_API_KEY=${{ secrets.BACKEND_API_KEY }}"
+            --allow-unauthenticated \
+            --set-env-vars "BACKEND_URL=https://wiki-generator-backend-ud74aktrjq-uc.a.run.app,BACKEND_API_KEY=${{ secrets.BACKEND_API_KEY }}"
 
       - name: Show URL
         run: |
