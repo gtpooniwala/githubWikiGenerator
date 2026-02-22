@@ -93,22 +93,24 @@ Response:
 }
 ```
 
-## Implementation Progress
+## How It Works
 
-| Step | Status | Description |
-|------|--------|-------------|
-| 1 | ✅ | Repo hygiene + Docker context control |
-| 2 | ✅ | Backend venv + requirements + pytest harness |
-| 3 | ✅ | Config + auth middleware (BACKEND_API_KEY) |
-| 4 | ✅ | Canonical Pydantic schemas |
-| 5 | ✅ | GitHub repo snapshot (tree + files) |
-| 6 | ✅ | Chunker (semantic + sliding window) |
-| 7 | ✅ | Signals extraction (README, routes, entrypoints) |
-| 8–10 | 🔲 | Frontend proxy route + UI MVP + navigable wiki pages |
-| 11–19 | 🔲 | Backend pipeline: import graph → search index → LLM → evidence → page writing → wire endpoint |
-| 20–21 | 🔲 | CI test gating + final deploy + smoke checks |
+The backend runs a multi-stage pipeline when a repo URL is submitted:
 
-See [guide.md](guide.md) for full execution spec and current status.
+1. **Snapshot** — fetches the repo tree and downloads included source files via GitHub REST API
+2. **Filter** — excludes binaries, build artefacts, and oversized files
+3. **Chunk** — splits each file into semantically bounded chunks with stable `path:start-end` IDs
+4. **Signals** — extracts README headings, API routes, and entry points without LLM calls
+5. **Import graph** — builds a file-to-file dependency graph (Python + JS/TS) for evidence expansion
+6. **Search index** — BM25 keyword index over all chunks for feature-scoped retrieval
+7. **Feature proposals** — LLM identifies 5–9 user-facing features with seed file paths
+8. **Evidence gathering** *(in progress)* — assembles bounded evidence packs per feature via seed files + import graph expansion + search hits
+9. **Page writing** *(in progress)* — LLM generates markdown per feature with inline chunk citations converted to GitHub permalink URLs
+10. **Overview** *(in progress)* — repo-level summary generated from README + entry points
+
+Progress events are streamed to the browser via SSE (`GET /api/generate/stream`) so users see live status updates while the pipeline runs.
+
+See [guide.md](guide.md) for the full execution spec.
 
 ## Deployment
 
