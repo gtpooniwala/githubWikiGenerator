@@ -13,17 +13,18 @@ The app is fully deployed and ready to use. No setup required.
 1. The page may take **a few seconds to load** on first visit while the frontend and backend warm up. A health-check runs automatically — wait for it to show a green "healthy" status before proceeding.
 2. Paste any **public GitHub repository URL** into the input box, or select one of the pre-filled examples.
 3. Click **Generate Wiki**.
-4. Watch live progress as the pipeline runs. Wiki generation typically completes in **under 5 minutes**.
+4. Watch live progress as the pipeline runs. Wiki generation typically completes in **a few minutes for small/medium repos; larger repos may take longer**.
 5. Once the wiki appears, use the **Ask the wiki** panel at the bottom of the content area to ask questions about the repository — the entire generated wiki is used as context for each answer.
 
 The output includes an **Overview page** (what the project does, architecture, quickstart) and a set of **Feature pages** — one per user-facing feature, each with inline citations that link to the exact source lines on GitHub at the analysed commit SHA.
 
-> **Note on architecture:** The backend is separate from the frontend and requires an API key to call directly. 
+> **Note on architecture:** The backend is separate from the frontend and requires an API key to call directly.
 
-**Having trouble?**
+**Troubleshooting**
 
-- If the page or health-check takes **longer than ~1 minute** to respond, or if you see an error, please reach out to me directly.
-- If wiki generation takes **longer than 10 minutes**, something has gone wrong — contact me and I'll look into it.
+- **Slow initial load / health check stuck:** Cloud Run services spin down after inactivity. Wait up to 30 seconds on first visit; the health indicator will turn green once the backend is warm.
+- **Wiki generation stalls or errors:** Try a smaller or simpler repo first to confirm the pipeline is working. If the issue persists across multiple repos, the backend may be hitting an API quota limit — try again in a few minutes.
+- **Generation takes over 10 minutes:** Something has gone wrong. Refresh and try a different repo, or raise an issue on the repository.
 
 ---
 
@@ -47,11 +48,10 @@ The output includes an **Overview page** (what the project does, architecture, q
     └── deploy-frontend.yml
 ```
 
-## Live URLs
+## Live URL
 
 | Service | URL |
 |---------|-----|
-| Backend | `https://wiki-generator-backend-ud74aktrjq-uc.a.run.app` |
 | Frontend | `https://wiki-generator-frontend-254204084242.us-central1.run.app/` |
 
 ## Local Development
@@ -71,12 +71,15 @@ pip install -r requirements.txt -r requirements-dev.txt
 uvicorn main:app --reload --port 8080 --app-dir src
 ```
 
-**Required env vars** — defined in `.env` at the project root:
+**Required env vars** — single `.env` file at the project root (used by both backend and frontend locally):
 
 ```
 BACKEND_API_KEY=<app auth key>
 OPENAI_API_KEY=<openai key>
+BACKEND_URL=http://localhost:8080
 ```
+
+The frontend reads `BACKEND_URL` and `BACKEND_API_KEY` from this file via Next.js's built-in `.env` loading.
 
 ### Frontend
 
@@ -84,13 +87,6 @@ OPENAI_API_KEY=<openai key>
 cd frontend
 npm install
 npm run dev    # http://localhost:3000
-```
-
-**Required env vars** (`frontend/.env.local`):
-
-```
-BACKEND_URL=http://localhost:8080
-BACKEND_API_KEY=<same app auth key as backend>
 ```
 
 ## API
@@ -152,42 +148,37 @@ The backend runs a deterministic multi-stage pipeline when a repo URL is submitt
 GitHub URL
     │
     ▼
- 1. Parse URL          extract owner + repo from the URL
-    │
+ 1. Load Snapshot      fetch git tree + file contents via GitHub REST API;
+    │                  filter out binaries, build artefacts, and oversized
+    │                  files; pin everything to the latest commit SHA
     ▼
- 2. Load Snapshot      fetch git tree + file contents via GitHub REST API
-    │                  (pinned to the latest commit SHA)
+ 2. Extract Signals    scan files for README headings, HTTP route
+    │                  definitions, and entry-point indicators — no LLM
     ▼
- 3. Filter Files       drop binaries, generated files, build artefacts,
-    │                  and files above the size limit
-    ▼
- 4. Extract Signals    scan files for README headings, HTTP route
-    │                  definitions, and entry-point files — no LLM
-    ▼
- 5. Chunk Files        split every file into line-numbered text chunks
+ 3. Chunk Files        split every file into line-numbered text chunks
     │                  with stable IDs ("path:start-end")
     ▼
- 6. Build Import Graph map file-to-file import relationships for
+ 4. Build Import Graph map file-to-file import relationships for
     │                  Python and JS/TS to enable evidence expansion
     ▼
- 7. Build Search Index BM25 keyword index over all chunks for fast
+ 5. Build Search Index BM25 keyword index over all chunks for fast
     │                  per-feature retrieval
     ▼
- 8. Propose Features ◆ LLM call — identify 5–9 user-facing features,
+ 6. Propose Features ◆ LLM call — identify 5–9 user-facing features,
     │                  each with a title + seed file paths
     ▼
- 9. Gather Evidence    per feature: seed files → import-graph expansion
+ 7. Gather Evidence    per feature: seed files → import-graph expansion
     │                  → BM25 search → deduplicated bounded chunk pack
     ▼
-10. Write Feature      ◆ LLM call per feature — generate markdown with
+ 8. Write Feature      ◆ LLM call per feature — generate markdown with
     Pages              inline citations; citations are converted to
     │                  stable GitHub permalink URLs (owner/repo/blob/SHA#Lx)
     ▼
-11. Write Overview   ◆ LLM call — repo-level summary generated from
+ 9. Write Overview   ◆ LLM call — repo-level summary generated from
     Page               README + manifest files + entry points
     │
     ▼
-12. Assemble           return GenerateResponse: commit SHA, overview
+    Assemble           return GenerateResponse: commit SHA, overview
     Response           markdown, and list of feature pages
 ```
 
@@ -195,22 +186,19 @@ GitHub URL
 
 | # | Stage | Service | LLM? |
 |---|-------|---------|------|
-| 1 | Parse URL | `pipeline.py` | — |
-| 2 | Load snapshot | `repo_loader.py` → GitHub REST API | — |
-| 3 | Filter files | `file_filter.py` | — |
-| 4 | Extract signals | `signals.py` (headings, routes, entrypoints) | — |
-| 5 | Chunk files | `chunker.py` | — |
-| 6 | Build import graph | `import_graph.py` (Python `import` + JS/TS `import`/`require`) | — |
-| 7 | Build search index | `search_index.py` (BM25) | — |
-| 8 | Propose features | `propose_features.py` | ✓ `gpt-5-mini` |
-| 9 | Gather evidence | `evidence.py` (seed → graph expand → BM25 → dedup) | — |
-| 10 | Write feature pages | `write_pages.py` → `citations.py` (chunk ID → permalink) | ✓ `gpt-5-mini` × N |
-| 11 | Write overview | `write_pages.py` | ✓ `gpt-5-mini` |
-| 12 | Assemble response | `pipeline.py` | — |
+| 1 | Load snapshot | `repo_loader.py` → GitHub REST API (filtered by `file_filter.py`) | — |
+| 2 | Extract signals | `signals.py` (headings, routes, entrypoints) | — |
+| 3 | Chunk files | `chunker.py` | — |
+| 4 | Build import graph | `import_graph.py` (Python `import` + JS/TS `import`/`require`) | — |
+| 5 | Build search index | `search_index.py` (BM25) | — |
+| 6 | Propose features | `propose_features.py` | ✓ `gpt-5-mini` |
+| 7 | Gather evidence | `evidence.py` (seed → graph expand → BM25 → dedup) | — |
+| 8 | Write feature pages | `write_pages.py` → `citations.py` (chunk ID → permalink) | ✓ `gpt-5-mini` × N |
+| 9 | Write overview | `write_pages.py` | ✓ `gpt-5-mini` |
 
 ### SSE streaming
 
-All ten pipeline stages run inside the SSE generator (`GET /api/generate/stream`). The browser receives a named event as each stage completes:
+All nine pipeline stages run inside the SSE generator (`GET /api/generate/stream`). The browser receives a named event as each stage completes:
 
 | Event | Stage |
 |---|---|

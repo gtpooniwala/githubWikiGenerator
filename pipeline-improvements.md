@@ -9,7 +9,7 @@ This document has three goals:
 It complements:
 
 - [README.md](README.md) for concise project summary
-- [guide.md](guide.md) for execution spec and stage sequencing
+- [guide.md](guide.md) for build history and stage sequencing
 
 ---
 

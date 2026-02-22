@@ -49,7 +49,9 @@ def _headers() -> dict[str, str]:
     return h
 
 
-def _get(url: str, *, params: dict | None = None, timeout: float = 20) -> httpx.Response:
+def _get(
+    url: str, *, params: dict | None = None, timeout: float = 20
+) -> httpx.Response:
     """GET *url* with automatic rate-limit handling and retry.
 
     Raises:
@@ -72,8 +74,7 @@ def _get(url: str, *, params: dict | None = None, timeout: float = 20) -> httpx.
 
         # ── Rate limited (primary or secondary) ──────────────────────────────
         is_rate_limited = r.status_code == 429 or (
-            r.status_code == 403
-            and "rate limit" in r.text.lower()
+            r.status_code == 403 and "rate limit" in r.text.lower()
         )
         if is_rate_limited:
             if attempt == _MAX_RETRIES:
@@ -92,7 +93,7 @@ def _get(url: str, *, params: dict | None = None, timeout: float = 20) -> httpx.
         if r.status_code >= 500:
             if attempt == _MAX_RETRIES:
                 r.raise_for_status()
-            time.sleep(2 ** attempt)  # 1 s, 2 s, 4 s, 8 s
+            time.sleep(2**attempt)  # 1 s, 2 s, 4 s, 8 s
             continue
 
         # ── Non-retriable client error (404, 401, etc.) ───────────────────────
