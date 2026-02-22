@@ -104,9 +104,9 @@ The backend runs a multi-stage pipeline when a repo URL is submitted:
 5. **Import graph** — builds a file-to-file dependency graph (Python + JS/TS) for evidence expansion
 6. **Search index** — BM25 keyword index over all chunks for feature-scoped retrieval
 7. **Feature proposals** — LLM identifies 5–9 user-facing features with seed file paths
-8. **Evidence gathering** *(in progress)* — assembles bounded evidence packs per feature via seed files + import graph expansion + search hits
-9. **Page writing** *(in progress)* — LLM generates markdown per feature with inline chunk citations converted to GitHub permalink URLs
-10. **Overview** *(in progress)* — repo-level summary generated from README + entry points
+8. **Evidence gathering** — assembles bounded evidence packs per feature via seed files + import graph expansion + search hits
+9. **Page writing** — LLM generates markdown per feature with inline chunk citations converted to GitHub permalink URLs
+10. **Overview** — repo-level summary generated from README + entry points
 
 Progress events are streamed to the browser via SSE (`GET /api/generate/stream`) so users see live status updates while the pipeline runs.
 

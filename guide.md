@@ -103,11 +103,11 @@ Step X: <short name>
 | — | Health check button in header | `fc3c067` | `page.tsx` — reusable `api.checkHealth`, button in header; frontend-only |  
 | — | Fix SSE stream flush | `2a31a7a` | `generate.py` — emit events one-by-one with `asyncio.sleep(0)` flush; `connecting` event added; 2 test updates |
 | 15 | Evidence gathering | `0bee742` | `services/evidence.py` — seed→import-graph BFS→search hits, dedup, max_chunks/max_chars bounds; 24 tests |
-| 16 | Page writing + citations | `pending` | `services/citations.py` + `services/write_pages.py` — [path:start-end] → GitHub permalink links; per-feature LLM page writer; 38 tests |
+| 16 | Page writing + citations | `d5b4b2a` | `services/citations.py` + `services/write_pages.py` — [path:start-end] → GitHub permalink links; per-feature LLM page writer; 38 tests |
 | 17 | Overview page | `5278916` | `write_overview_page()` in `services/write_pages.py` — README+manifests+entrypoints evidence; 13 new tests; 263 total |
 | 18 | Pipeline orchestrator | `8259cc5` | `services/pipeline.py` — `run_pipeline()` wires all stages; `test_pipeline_smoke.py` 21 tests; 284 total |
 | 19 | Wire `/api/generate` endpoint | `5e613e4` | `routers/generate.py` calls `run_pipeline()`; `test_schemas.py` + `test_auth.py` mock pipeline; 284 backend |
-| 20 | Frontend navigable wiki | `pending` | `page.tsx` renders `WikiViewer` after SSE+POST; `/wiki/[owner]/[repo]` standalone page; 28 frontend tests |
+| 20 | Frontend navigable wiki | `ba327e7` | `page.tsx` renders `WikiViewer` after SSE+POST; `/wiki/[owner]/[repo]` standalone page; 28 frontend tests |
 
 **284 backend tests passing** across all test files.
 **28 frontend tests passing**: `route-generate.test.ts` (7) + `route-stream.test.ts` (5) + `ui-basic.test.tsx` (16).
@@ -120,7 +120,7 @@ Step X: <short name>
 
 * **Backend Cloud Run URL:** `https://wiki-generator-backend-ud74aktrjq-uc.a.run.app`
 * **GCP project:** `pushstart-481717`, region `us-central1`
-* **Latest deployed commit:** `2a31a7a` (SSE flush fix; CI redeploys on push to `backend/**`)
+* **Latest deployed commit:** `ba327e7` (Step 20: navigable wiki pages; CI redeploys on push to `backend/**`)
 * Smoke checks: `GET /health` → `{"status":"healthy"}` ✅
 
 ### Critical Technical Context (for new sessions)
@@ -210,8 +210,6 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 
 ### Items Pending ❗
 
-* **Steps 11–19** – Backend pipeline: import graph → search index → LLM client → feature proposals → evidence gathering → page writing → overview page → pipeline orchestrator → wire endpoint
-* **Step 20** – Frontend navigable wiki pages (sidebar, `/wiki/[owner]/[repo]` route)
 * **Step 21** – CI test gating
 * **Step 22** – Final deploy + smoke checks
 
