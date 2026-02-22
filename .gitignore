@@ -25,4 +25,4 @@ __pycache__/
 gcp-key.json
 
 # OS files
-.DS_Store
+*.DS_Store

@@ -68,7 +68,7 @@ export function WikiViewer({ data }: WikiViewerProps) {
       {/* ── Sidebar ────────────────────────────────────────────────────────── */}
       <nav
         aria-label="Wiki sections"
-        className="w-full lg:w-64 shrink-0 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50"
+        className="w-full lg:w-72 shrink-0 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50"
       >
         {/* Repo info */}
         <div className="p-4 border-b border-slate-200 shrink-0">

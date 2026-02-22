@@ -323,13 +323,3 @@ Track these metrics on a fixed benchmark repo set:
 - Failure rate (parse/retrieval errors)
 
 Only adopt changes that improve quality materially without unacceptable cost/latency regression.
-
----
-
-## Recommended doc split
-
-- **README.md**: concise summary + links
-- **guide.md**: current runtime behavior/spec
-- **pipeline-improvements.md** (this file): architecture rationale, audit, alternatives, and roadmap
-
-This keeps user-facing docs readable while preserving the engineering decision record.
