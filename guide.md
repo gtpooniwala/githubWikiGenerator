@@ -26,7 +26,8 @@ It is aligned to the **current architecture**`:
 
 For each step:
 
-1. Implement exactly the tasks listed.
+0. Focus on one step at a time. Avoid jumping ahead, making assumptions or making plans about future steps.
+1. Implement exactly the tasks listed. If there is a problem with the instructions or you think of a better way to do something, pause execution and ask for clarification before proceeding. Do not make unilateral decisions that deviate from the spec without approval.
 2. Run tests locally.
 3. Report:
 
@@ -49,6 +50,7 @@ A step is only complete when:
 2. **You approve** the changes
 3. Changes are **committed**
 4. **Deployment succeeds** (Cloud Run revision healthy + smoke checks)
+5. You update the “Current Status” section in this doc with a brief summary of what was done and any known issues.
 
 ### Commit Message Template
 
