@@ -305,7 +305,7 @@ Step X: <short name>
 
 ### Tasks
 
-1. Create venv (must be used always):
+1. Create venv (must be used always for backend work):
 
    ```bash
    cd backend
@@ -314,7 +314,7 @@ Step X: <short name>
    python -m pip install --upgrade pip
    ```
 
-2. Add `requirements.txt` (runtime) and `requirements-dev.txt` (dev/testing).
+2. Add `requirements.txt` (runtime) and `requirements-dev.txt` (dev/testing). Make sure to update them as you add dependencies in future steps.
 
 3. Add `pytest.ini` with:
 
