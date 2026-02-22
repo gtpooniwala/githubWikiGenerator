@@ -2,25 +2,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { GenerateResponse } from '@/lib/api';
 
-// Mock the api module (used by page.tsx)
+// Mock the api module — page.tsx only uses checkHealth now
 vi.mock('@/lib/api', () => ({
   checkHealth: vi.fn().mockResolvedValue({ status: 'healthy' }),
-  generateWiki: vi.fn(),
 }));
 
-import { generateWiki } from '@/lib/api';
+import { checkHealth } from '@/lib/api';
 import Home from '../src/app/page';
 import { RepoForm } from '../src/components/RepoForm';
 
 // ---------------------------------------------------------------------------
-// Minimal EventSource mock — jsdom doesn't include EventSource
+// MockEventSource — jsdom doesn't include EventSource
 // ---------------------------------------------------------------------------
 class MockEventSource {
   static instances: MockEventSource[] = [];
+  static OPEN = 1;
+  static CLOSED = 2;
+
   url: string;
-  onerror: (() => void) | null = null;
+  readyState = MockEventSource.OPEN;
+  onerror: ((e?: Event) => void) | null = null;
   private listeners: Record<string, Array<(e: { data: string }) => void>> = {};
 
   constructor(url: string) {
@@ -37,15 +39,21 @@ class MockEventSource {
     this.listeners[event]?.forEach((h) => h({ data: JSON.stringify(data) }));
   }
 
-  close() {}
+  close() {
+    this.readyState = MockEventSource.CLOSED;
+  }
 }
 
-// Silence real fetch calls (warm-up health check)
+// ---------------------------------------------------------------------------
+// Shared setup
+// ---------------------------------------------------------------------------
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 200 })));
   vi.stubGlobal('EventSource', MockEventSource);
   MockEventSource.instances = [];
   vi.clearAllMocks();
+  // Re-apply after clearAllMocks
+  vi.mocked(checkHealth).mockResolvedValue({ status: 'healthy' });
 });
 
 describe('RepoForm', () => {
@@ -99,16 +107,24 @@ describe('Home page', () => {
     expect(screen.getByRole('button', { name: /generate wiki/i })).toBeInTheDocument();
   });
 
-  it('fires warm-up health fetch on mount', () => {
+  it('calls checkHealth on mount for warm-up', () => {
     render(<Home />);
-    expect(vi.mocked(fetch)).toHaveBeenCalledWith('/api/health');
+    expect(vi.mocked(checkHealth)).toHaveBeenCalledOnce();
   });
 
-  it('shows loading state while generate is in progress', async () => {
-    const user = userEvent.setup();
+  it('shows backend healthy indicator after successful health check', async () => {
+    render(<Home />);
+    await waitFor(() => expect(screen.getByText(/backend healthy/i)).toBeInTheDocument());
+  });
 
-    // Return a promise that never resolves so we stay in loading state
-    vi.mocked(generateWiki).mockReturnValue(new Promise(() => {}));
+  it('shows backend unreachable indicator when health check fails', async () => {
+    vi.mocked(checkHealth).mockRejectedValueOnce(new Error('connection refused'));
+    render(<Home />);
+    await waitFor(() => expect(screen.getByText(/backend unreachable/i)).toBeInTheDocument());
+  });
+
+  it('shows loading state while SSE stream is in progress', async () => {
+    const user = userEvent.setup();
 
     render(<Home />);
 
@@ -116,82 +132,75 @@ describe('Home page', () => {
     await user.type(input, 'https://github.com/owner/repo');
     await user.click(screen.getByRole('button', { name: /generate wiki/i }));
 
+    // SSE is open but no events emitted yet — loading spinner should show
     expect(screen.getByRole('status', { name: /generating wiki/i })).toBeInTheDocument();
-    // submit button should be disabled while loading
     expect(screen.getByRole('button', { name: /generating/i })).toBeDisabled();
   });
 
-  it('displays wiki viewer after successful generation', async () => {
+  it('shows pipeline complete banner after SSE done event', async () => {
     const user = userEvent.setup();
-
-    vi.mocked(generateWiki).mockResolvedValue({
-      repo_id: 'owner/repo',
-      commit_sha: 'abc1234def5678',
-      overview_md: '# My Overview\n\nSome overview text.',
-      features: [
-        {
-          id: 'auth',
-          title: 'Authentication',
-          description: 'Handles user auth',
-          content_md: '## Auth details here',
-        },
-      ],
-    });
 
     render(<Home />);
 
     const input = screen.getByRole('textbox', { name: /github repository url/i });
     await user.type(input, 'https://github.com/owner/repo');
     await user.click(screen.getByRole('button', { name: /generate wiki/i }));
+
+    const es = MockEventSource.instances[0];
+    act(() => es.emit('done', { message: 'Complete' }));
 
     await waitFor(() => {
-      // sidebar nav + content heading both contain 'Authentication'; checking the heading is enough
-      expect(screen.getByRole('heading', { name: /authentication/i, level: 1 })).toBeInTheDocument();
+      expect(screen.getByText(/pipeline complete/i)).toBeInTheDocument();
     });
 
-    expect(screen.getByText('owner/repo')).toBeInTheDocument();
+    // Loading spinner should be gone
+    expect(screen.queryByRole('status', { name: /generating wiki/i })).not.toBeInTheDocument();
   });
 
-  it('shows error message when generate fails', async () => {
+  it('shows error message when SSE error event fires', async () => {
     const user = userEvent.setup();
-
-    vi.mocked(generateWiki).mockRejectedValue(new Error('Network error'));
 
     render(<Home />);
 
     const input = screen.getByRole('textbox', { name: /github repository url/i });
     await user.type(input, 'https://github.com/owner/repo');
     await user.click(screen.getByRole('button', { name: /generate wiki/i }));
+
+    const es = MockEventSource.instances[0];
+    act(() => es.emit('error', { message: 'Rate limit exceeded' }));
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Network error');
+    expect(screen.getByRole('alert')).toHaveTextContent('Rate limit exceeded');
   });
 
-  it('displays SSE status messages as events arrive', async () => {
+  it('creates EventSource with encoded repo_url and displays events with details', async () => {
     const user = userEvent.setup();
-
-    // generateWiki never resolves so we stay in the loading state
-    vi.mocked(generateWiki).mockReturnValue(new Promise(() => {}));
-
     render(<Home />);
 
-    const input = screen.getByRole('textbox', { name: /github repository url/i });
-    await user.type(input, 'https://github.com/owner/repo');
+    await user.type(
+      screen.getByRole('textbox', { name: /github repository url/i }),
+      'https://github.com/owner/repo',
+    );
     await user.click(screen.getByRole('button', { name: /generate wiki/i }));
 
-    // Retrieve the MockEventSource created during handleGenerate
     const es = MockEventSource.instances[0];
     expect(es).toBeDefined();
     expect(es.url).toContain('repo_url=');
     expect(es.url).toContain(encodeURIComponent('https://github.com/owner/repo'));
 
-    act(() => es.emit('repo_loaded', { message: 'Repository loaded' }));
+    act(() => es.emit('repo_loaded', { message: 'Repository loaded', file_count: 42, commit_sha: 'abc1234' }));
     await waitFor(() => expect(screen.getByText(/repository loaded/i)).toBeInTheDocument());
+    expect(screen.getByText(/42 files/)).toBeInTheDocument();
 
-    act(() => es.emit('chunked', { message: 'Files chunked' }));
+    act(() => es.emit('chunked', { message: 'Files chunked', chunk_count: 99 }));
     await waitFor(() => expect(screen.getByText(/files chunked/i)).toBeInTheDocument());
+    expect(screen.getByText(/99 chunks/)).toBeInTheDocument();
+
+    act(() => es.emit('signals_extracted', { message: 'Signals extracted', routes: 5, headings: 8, entrypoints: 2 }));
+    await waitFor(() => expect(screen.getByText(/signals extracted/i)).toBeInTheDocument());
+    expect(screen.getByText(/5 routes/)).toBeInTheDocument();
   });
 });
