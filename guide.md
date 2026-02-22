@@ -110,7 +110,7 @@ Step X: <short name>
 
 #### Environment & Keys
 * Auth env var is **`BACKEND_API_KEY`** — read in `backend/src/config.py`. No hardcoded default; if unset, auth always fails.
-* The only valid values are in `backend/.env` (gitignored, local dev) and GitHub Secrets (Cloud Run). Never hardcode a key value in code or tests.
+* The only valid values are in `.env` at the project root (gitignored, local dev) and GitHub Secrets (Cloud Run). Never hardcode a key value in code or tests.
 * `OPENAI_API_KEY` is backend-only; never expose to frontend.
 
 #### Running Tests
@@ -165,6 +165,7 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 * CI test gating (Step 20)
 * Frontend full UI (Step 18–19)
 * Frontend/backend compatibility check (route.ts bug above)
+* Documentation of final product and architecture
 
 ---
 

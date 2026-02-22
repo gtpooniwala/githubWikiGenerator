@@ -15,16 +15,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const response = await fetch(
-      `${BACKEND_URL}/api/generate?repo_url=${encodeURIComponent(repoUrl)}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': API_KEY,
-        },
-      }
-    );
+    const response = await fetch(`${BACKEND_URL}/api/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': API_KEY,
+      },
+      body: JSON.stringify({ repo_url: repoUrl }),
+    });
 
     const data = await response.json();
 

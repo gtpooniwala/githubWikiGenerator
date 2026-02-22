@@ -25,7 +25,7 @@ Automatic wiki generator for public GitHub repositories. Analyses repo code and 
 | Service | URL |
 |---------|-----|
 | Backend | `https://wiki-generator-backend-ud74aktrjq-uc.a.run.app` |
-| Frontend | _(deploy pending full UI)_ |
+| Frontend | `https://wiki-generator-frontend-254204084242.us-central1.run.app/` |
 
 ## Local Development
 
@@ -44,7 +44,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 uvicorn main:app --reload --port 8080 --app-dir src
 ```
 
-**Required env vars** (copy from `.env.example` or create `backend/.env`):
+**Required env vars** — defined in `.env` at the project root (gitignored):
 
 ```
 BACKEND_API_KEY=<app auth key>
