@@ -79,25 +79,92 @@ Step X: <short name>
 
 ---
 
-## Current Status (Already Done)
+## Current Status
 
-### Hosting / CI ✅
+### Steps Complete ✅
 
-* Monorepo split into `frontend/` and `backend/`
-* Both deployed to Cloud Run
-* GitHub Actions uses WIF and can deploy
+| Step | Name | Commit | Notes |
+|------|------|--------|-------|
+| 1 | Repo hygiene + Docker context | `4743029` | `.gitignore`, `.dockerignore`, `gcp-key.json` removed |
+| 2 | Backend venv + pytest harness | `d085283` | `requirements.txt`, `requirements-dev.txt`, `pytest.ini` |
+| 3 | Config + auth middleware | `f685a42` | `src/config.py`, `src/auth.py`, auth on `/api/generate` |
+| 4 | Canonical schemas | `d06a905` | `src/models/schemas.py`, Dockerfile fixed |
+| 5 | GitHub repo snapshot | `764a1f8` | `services/github_client.py`, `file_filter.py`, `repo_loader.py` |
+| 6 | Chunker | `3bf53cb` | `services/chunker.py` — semantic + sliding window |
+| 7 | Signals extraction | `4caff95` | `services/signals.py` — README, routes, entrypoints |
 
-### Frontend → backend wiring ✅
+**74 tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`.
 
-* Next route handler exists: `frontend/src/app/api/health/route.ts` proxying to backend
-* Homepage currently performs health checks
+### Next Step
 
-### Known items still missing ❗
+**STEP 8: Backend – File-level Import Graph** (`services/import_graph.py`)
 
-* Backend local venv, dependency management, full test harness
-* Backend core pipeline implementation
-* Frontend full UI (wiki navigation + display)
-* CI test gating
+### Deployment
+
+* **Backend Cloud Run URL:** `https://wiki-generator-backend-ud74aktrjq-uc.a.run.app`
+* **GCP project:** `pushstart-481717`, region `us-central1`
+* **Latest deployed commit:** `4caff95` (Step 7)
+* Smoke checks: `GET /health` → `{"status":"healthy"}` ✅
+
+### Critical Technical Context (for new sessions)
+
+#### Environment & Keys
+* Auth env var is **`BACKEND_API_KEY`** — read in `backend/src/config.py` as `API_KEY = os.environ.get("BACKEND_API_KEY", "dev-key-123")`
+* Local dev key lives in `backend/.env` (gitignored). Cloud Run has a different value set — do NOT assume `dev-key-123` works against production.
+* `OPENAI_API_KEY` is backend-only; never expose to frontend.
+
+#### Running Tests
+```bash
+cd backend
+.venv/bin/python -m pytest -q
+```
+Do NOT use `pytest` directly — always use `.venv/bin/python -m pytest` to avoid PATH issues.
+Use `GH_PAGER=cat` prefix for any `gh` CLI commands to avoid pager hangs.
+
+#### Backend Structure
+```
+backend/src/
+├── main.py          # FastAPI app, wires routers; CMD: uvicorn main:app --host 0.0.0.0 --port 8080
+├── config.py        # Reads BACKEND_API_KEY, OPENAI_API_KEY
+├── auth.py          # require_api_key() FastAPI dependency
+├── models/
+│   └── schemas.py   # GenerateRequest, WikiFeature, GenerateResponse
+├── routers/
+│   ├── health.py    # GET /health
+│   └── generate.py  # POST /api/generate (stub returning deterministic GenerateResponse)
+└── services/
+    ├── github_client.py  # get_repo, get_branch_sha, get_tree, get_file (httpx)
+    ├── file_filter.py    # should_include(path, size_bytes, is_binary_guess) -> bool
+    ├── repo_loader.py    # load_snapshot(owner, repo) -> RepoSnapshot
+    ├── chunker.py        # chunk_file(path, content) -> list[Chunk]; semantic + sliding window
+    └── signals.py        # extract_readme_signals, extract_route_signals, extract_entrypoints
+```
+`PYTHONPATH=/app/src` in Dockerfile; `pythonpath = src` in `pytest.ini`.
+
+#### Frontend Route (Known Bug)
+`frontend/src/app/api/generate/route.ts` exists but passes `repo_url` as a **query param** instead of a JSON body — this will fail against the backend. Must be fixed in Step 17 (Frontend proxy step).
+
+#### respx Fixtures
+Shared respx fixtures use `assert_all_called=False` — this is correct, not a workaround.
+
+#### Deployment Commands
+```bash
+# Deploy backend
+gcloud run deploy wiki-generator-backend --project pushstart-481717 --source ./backend --region us-central1 --allow-unauthenticated
+
+# Check CI
+GH_PAGER=cat gh run list --repo gtpooniwala/githubWikiGenerator
+
+# Check logs
+gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=wiki-generator-backend" --project pushstart-481717 --limit 20 --format "table(timestamp,textPayload)"
+```
+
+### Items Pending ❗
+
+* Steps 8–21: full pipeline from import graph → LLM → wiki assembly → frontend UI
+* CI test gating (Step 20)
+* Frontend full UI (Step 18–19)
+* Frontend/backend compatibility check (route.ts bug above)
 
 ---
 
@@ -212,7 +279,7 @@ Step X: <short name>
 
 * `POST /api/generate`
 
-  * Headers: `x-api-key: <API_KEY>`
+  * Headers: `x-api-key: <BACKEND_API_KEY>`
   * Body:
 
     ```json
@@ -342,13 +409,13 @@ pytest -q
 
 ---
 
-## STEP 3: Backend – Config + Auth Middleware (API_KEY)
+## STEP 3: Backend – Config + Auth Middleware (BACKEND_API_KEY)
 
 ### Tasks
 
 1. Implement `src/config.py`:
 
-   * reads `API_KEY` (app key for frontend→backend auth) and `OPENAI_API_KEY` (kept server-side only)
+   * reads `BACKEND_API_KEY` (app key for frontend→backend auth) and `OPENAI_API_KEY` (kept server-side only)
    * safe defaults for local dev
 
 2. Add auth helper:
@@ -819,7 +886,7 @@ One function that runs the full pipeline with stable intermediate artifacts.
 
    * validates request JSON
    * forwards to `${BACKEND_URL}/api/generate`
-   * injects header `x-api-key: API_KEY`
+   * injects header `x-api-key: BACKEND_API_KEY`
    * forwards response
 
 2. Add route tests:
@@ -915,13 +982,13 @@ One function that runs the full pipeline with stable intermediate artifacts.
 
 Backend Cloud Run:
 
-* `API_KEY`
+* `BACKEND_API_KEY`
 * `OPENAI_API_KEY`
 
 Frontend Cloud Run:
 
 * `BACKEND_URL`
-* `API_KEY`
+* `BACKEND_API_KEY`
 
 ### Smoke checks
 
