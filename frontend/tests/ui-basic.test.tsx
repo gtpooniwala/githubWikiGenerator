@@ -278,27 +278,33 @@ describe('WikiViewer Q&A', () => {
     return render(<WikiViewer data={MOCK_WIKI} />);
   }
 
+  // Helper: render and navigate to the Ask the wiki page
+  async function renderAndOpenAsk() {
+    const user = userEvent.setup();
+    renderViewer();
+    await user.click(screen.getByRole('button', { name: /ask the wiki/i }));
+    return user;
+  }
+
   beforeEach(() => {
     vi.mocked(askQuestion).mockReset();
     vi.mocked(askQuestion).mockImplementation(() => new Promise(() => {})); // pending by default
   });
 
-  it('renders the Q&A section heading and input', () => {
-    renderViewer();
-    expect(screen.getByRole('region', { name: /wiki q&a/i })).toBeInTheDocument();
+  it('renders the Q&A heading and input after opening the Ask tab', async () => {
+    await renderAndOpenAsk();
     expect(screen.getByRole('textbox', { name: /ask a question about this wiki/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ask question/i })).toBeInTheDocument();
   });
 
-  it('Ask button is disabled when input is empty', () => {
-    renderViewer();
+  it('Ask button is disabled when input is empty', async () => {
+    await renderAndOpenAsk();
     const btn = screen.getByRole('button', { name: /ask question/i });
     expect(btn).toBeDisabled();
   });
 
   it('Ask button is enabled when input has text', async () => {
-    const user = userEvent.setup();
-    renderViewer();
+    const user = await renderAndOpenAsk();
     await user.type(
       screen.getByRole('textbox', { name: /ask a question about this wiki/i }),
       'How does auth work?',
@@ -308,8 +314,7 @@ describe('WikiViewer Q&A', () => {
 
   it('calls askQuestion with the question and wiki data when submitted', async () => {
     vi.mocked(askQuestion).mockResolvedValueOnce({ answer: 'Auth uses JWT.' });
-    const user = userEvent.setup();
-    renderViewer();
+    const user = await renderAndOpenAsk();
 
     await user.type(
       screen.getByRole('textbox', { name: /ask a question about this wiki/i }),
@@ -326,8 +331,7 @@ describe('WikiViewer Q&A', () => {
 
   it('displays the answer after a successful askQuestion call', async () => {
     vi.mocked(askQuestion).mockResolvedValueOnce({ answer: 'Auth uses JWT tokens.' });
-    const user = userEvent.setup();
-    renderViewer();
+    const user = await renderAndOpenAsk();
 
     await user.type(
       screen.getByRole('textbox', { name: /ask a question about this wiki/i }),
@@ -338,14 +342,13 @@ describe('WikiViewer Q&A', () => {
     await waitFor(() =>
       expect(screen.getByText(/auth uses jwt tokens\./i)).toBeInTheDocument(),
     );
-    // The question should also appear in the history
+    // The question should also appear as a heading in the history
     expect(screen.getByText('How does auth work?')).toBeInTheDocument();
   });
 
   it('shows an error alert when askQuestion rejects', async () => {
     vi.mocked(askQuestion).mockRejectedValueOnce(new Error('Rate limit hit'));
-    const user = userEvent.setup();
-    renderViewer();
+    const user = await renderAndOpenAsk();
 
     await user.type(
       screen.getByRole('textbox', { name: /ask a question about this wiki/i }),
@@ -360,8 +363,7 @@ describe('WikiViewer Q&A', () => {
   it('disables input and shows loading state while waiting for answer', async () => {
     // Keep askQuestion pending indefinitely
     vi.mocked(askQuestion).mockImplementation(() => new Promise(() => {}));
-    const user = userEvent.setup();
-    renderViewer();
+    const user = await renderAndOpenAsk();
 
     await user.type(
       screen.getByRole('textbox', { name: /ask a question about this wiki/i }),
@@ -382,8 +384,7 @@ describe('WikiViewer Q&A', () => {
       .mockResolvedValueOnce({ answer: 'First answer.' })
       .mockResolvedValueOnce({ answer: 'Second answer.' });
 
-    const user = userEvent.setup();
-    renderViewer();
+    const user = await renderAndOpenAsk();
 
     const input = screen.getByRole('textbox', { name: /ask a question about this wiki/i });
 
