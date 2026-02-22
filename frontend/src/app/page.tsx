@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { checkHealth as apiCheckHealth, generateWiki, GenerateResponse } from '@/lib/api';
+import { checkHealth as apiCheckHealth } from '@/lib/api';
 import { RepoForm } from '@/components/RepoForm';
-import { WikiViewer } from '@/components/WikiViewer';
 
 const SSE_EVENTS = ['repo_loaded', 'chunked', 'signals_extracted', 'features_proposed', 'pages_written', 'done'] as const;
 
@@ -29,8 +28,8 @@ type HealthStatus = 'idle' | 'checking' | 'healthy' | 'unhealthy';
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [wikiData, setWikiData] = useState<GenerateResponse | null>(null);
   const [statusMessages, setStatusMessages] = useState<StatusMessage[]>([]);
   const [healthStatus, setHealthStatus] = useState<HealthStatus>('idle');
 
@@ -49,14 +48,14 @@ export default function Home() {
     checkHealth();
   }, [checkHealth]);
 
-  const handleGenerate = useCallback(async (repoUrl: string) => {
+  const handleGenerate = useCallback((repoUrl: string) => {
     setLoading(true);
+    setDone(false);
     setError(null);
-    setWikiData(null);
     setStatusMessages([]);
 
-    // Open SSE stream for live progress updates
     const es = new EventSource(`/api/generate/stream?repo_url=${encodeURIComponent(repoUrl)}`);
+
     SSE_EVENTS.forEach((eventName) => {
       es.addEventListener(eventName, (e: MessageEvent) => {
         let parsed: Record<string, unknown> = {};
@@ -65,19 +64,28 @@ export default function Home() {
           ...prev,
           { label: String(parsed.message ?? eventName), detail: parseStatusDetail(eventName, parsed) },
         ]);
+        if (eventName === 'done') {
+          es.close();
+          setLoading(false);
+          setDone(true);
+        }
       });
     });
-    es.onerror = () => es.close();
 
-    try {
-      const data = await generateWiki(repoUrl);
-      setWikiData(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
-    } finally {
+    es.addEventListener('error', (e: MessageEvent) => {
+      let msg = 'Stream error';
+      try { msg = JSON.parse(e.data)?.message ?? msg; } catch { /* ignore */ }
+      setError(msg);
       es.close();
       setLoading(false);
-    }
+    });
+
+    // Fallback: if connection drops without a done/error event
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) {
+        setLoading(false);
+      }
+    };
   }, []);
 
   return (
@@ -156,7 +164,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* Loading state */}
+        {/* Spinner — only while loading */}
         {loading && (
           <div
             role="status"
@@ -167,30 +175,46 @@ export default function Home() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
-            {statusMessages.length > 0 ? (
-              <ul className="space-y-1 text-center">
-                {statusMessages.map((msg, i) => (
-                  <li
-                    key={i}
-                    className={`text-sm ${i === statusMessages.length - 1 ? 'text-blue-600 font-medium' : 'text-slate-400'}`}
-                  >
-                    {i === statusMessages.length - 1 ? '▶ ' : '✓ '}
-                    {msg.label}
-                    {msg.detail && <span className="ml-1 opacity-70">({msg.detail})</span>}
-                  </li>
-                ))}
-              </ul>
-            ) : (
+            {statusMessages.length === 0 && (
               <p className="text-sm">Analyzing repository and generating wiki…</p>
             )}
           </div>
         )}
+
+        {/* SSE status log — visible during AND after loading */}
+        {statusMessages.length > 0 && (
+          <ul className="mt-6 max-w-2xl mx-auto space-y-1">
+            {statusMessages.map((msg, i) => {
+              const isLast = i === statusMessages.length - 1;
+              return (
+                <li
+                  key={i}
+                  className={`flex items-baseline gap-2 text-sm ${
+                    isLast && loading ? 'text-blue-600 font-medium' : 'text-slate-500'
+                  }`}
+                >
+                  <span className="shrink-0 w-4 text-center">
+                    {isLast && loading ? '▶' : '✓'}
+                  </span>
+                  <span>
+                    {msg.label}
+                    {msg.detail && <span className="ml-1 text-slate-400">({msg.detail})</span>}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
-      {/* Wiki output */}
-      {wikiData && !loading && (
-        <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-16">
-          <WikiViewer data={wikiData} />
+      {/* Pipeline complete — wiki viewer will be wired here in a later step */}
+      {done && !loading && (
+        <section className="max-w-2xl mx-auto px-4 sm:px-6 pb-16">
+          <div className="rounded-xl border border-green-200 bg-green-50 p-6 text-center">
+            <p className="text-2xl mb-2">✅</p>
+            <p className="font-semibold text-green-800">Pipeline complete</p>
+            <p className="text-sm text-green-600 mt-1">Wiki generation is being implemented — the output will appear here once the LLM pipeline is wired up.</p>
+          </div>
         </section>
       )}
     </div>
