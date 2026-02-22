@@ -16,29 +16,42 @@ SHA = "abc123def456abc123def456abc123def456abc1"
 @pytest.fixture
 def mock_github():
     """Activate respx router for all tests in this module."""
-    with respx.mock(base_url="https://api.github.com", assert_all_called=False) as router:
+    with respx.mock(
+        base_url="https://api.github.com", assert_all_called=False
+    ) as router:
         # GET /repos/owner/sample-repo
         router.get(f"/repos/{OWNER}/{REPO}").mock(
-            return_value=httpx.Response(200, json=json.loads((FIXTURES / "repo.json").read_text()))
+            return_value=httpx.Response(
+                200, json=json.loads((FIXTURES / "repo.json").read_text())
+            )
         )
         # GET /repos/owner/sample-repo/git/ref/heads/main
         router.get(f"/repos/{OWNER}/{REPO}/git/ref/heads/main").mock(
-            return_value=httpx.Response(200, json=json.loads((FIXTURES / "ref.json").read_text()))
+            return_value=httpx.Response(
+                200, json=json.loads((FIXTURES / "ref.json").read_text())
+            )
         )
         # GET /repos/owner/sample-repo/git/trees/<sha>
         router.get(f"/repos/{OWNER}/{REPO}/git/trees/{SHA}").mock(
-            return_value=httpx.Response(200, json=json.loads((FIXTURES / "tree.json").read_text()))
+            return_value=httpx.Response(
+                200, json=json.loads((FIXTURES / "tree.json").read_text())
+            )
         )
         # GET /repos/owner/sample-repo/contents/README.md
         router.get(f"/repos/{OWNER}/{REPO}/contents/README.md").mock(
-            return_value=httpx.Response(200, json=json.loads((FIXTURES / "readme_file.json").read_text()))
+            return_value=httpx.Response(
+                200, json=json.loads((FIXTURES / "readme_file.json").read_text())
+            )
         )
         # Generic stub for any other content file
         router.get(url__regex=f"/repos/{OWNER}/{REPO}/contents/.*").mock(
-            return_value=httpx.Response(200, json={
-                "encoding": "base64",
-                "content": "cHJpbnQoJ2hlbGxvJyk=",  # print('hello')
-            })
+            return_value=httpx.Response(
+                200,
+                json={
+                    "encoding": "base64",
+                    "content": "cHJpbnQoJ2hlbGxvJyk=",  # print('hello')
+                },
+            )
         )
         yield router
 

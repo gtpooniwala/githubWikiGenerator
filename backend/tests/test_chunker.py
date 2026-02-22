@@ -7,6 +7,7 @@ from services.chunker import Chunk, WINDOW_SIZE, chunk_file
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _all_lines_covered(content: str, chunks: list[Chunk]) -> bool:
     """Every 1-based line index must appear in at least one chunk."""
     lines = content.splitlines(keepends=True)
@@ -27,6 +28,7 @@ def _max_chunk_lines(chunks: list[Chunk]) -> int:
 # Empty / trivial inputs
 # ---------------------------------------------------------------------------
 
+
 def test_empty_content_returns_no_chunks():
     assert chunk_file("empty.py", "") == []
 
@@ -41,6 +43,7 @@ def test_single_line_file():
 # ---------------------------------------------------------------------------
 # Sliding-window fallback (Markdown / plain text)
 # ---------------------------------------------------------------------------
+
 
 def _make_content(n_lines: int) -> str:
     return "".join(f"line {i}\n" for i in range(1, n_lines + 1))
@@ -164,7 +167,11 @@ def test_ts_semantic_full_coverage():
 def test_ts_semantic_max_chunk_size():
     lines = ["import React from 'react';\n"]
     for i in range(20):
-        lines += [f"export function fn{i}() {{\n"] + [f"  const x{j} = {j};\n" for j in range(5)] + ["}\n\n"]
+        lines += (
+            [f"export function fn{i}() {{\n"]
+            + [f"  const x{j} = {j};\n" for j in range(5)]
+            + ["}\n\n"]
+        )
     content = "".join(lines)
     chunks = chunk_file("big.ts", content)
     assert _all_lines_covered(content, chunks)
@@ -174,6 +181,7 @@ def test_ts_semantic_max_chunk_size():
 # ---------------------------------------------------------------------------
 # Stable / deterministic IDs
 # ---------------------------------------------------------------------------
+
 
 def test_chunk_ids_are_deterministic():
     chunks1 = chunk_file("module.py", PY_CONTENT)

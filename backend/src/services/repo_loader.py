@@ -30,7 +30,9 @@ def load_snapshot(owner: str, repo: str) -> RepoSnapshot:
     for item in candidates:
         try:
             content = github_client.get_file(owner, repo, item["path"], commit_sha)
-            files.append(FileEntry(path=item["path"], size=item.get("size", 0), content=content))
+            files.append(
+                FileEntry(path=item["path"], size=item.get("size", 0), content=content)
+            )
         except Exception:
             # Skip files that fail to download (permissions, encoding issues, etc.)
             pass

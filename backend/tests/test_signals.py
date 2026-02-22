@@ -39,7 +39,13 @@ def test_readme_headings_levels():
 def test_readme_headings_text():
     headings = extract_readme_signals(README)
     texts = [h.text for h in headings]
-    assert texts == ["My Project", "Features", "Authentication", "Installation", "Step 1"]
+    assert texts == [
+        "My Project",
+        "Features",
+        "Authentication",
+        "Installation",
+        "Step 1",
+    ]
 
 
 def test_readme_empty():
@@ -74,7 +80,11 @@ def delete_item(): ...
 
 
 def test_fastapi_routes_detected():
-    files = [FileEntry(path="src/main.py", size=len(FASTAPI_CONTENT), content=FASTAPI_CONTENT)]
+    files = [
+        FileEntry(
+            path="src/main.py", size=len(FASTAPI_CONTENT), content=FASTAPI_CONTENT
+        )
+    ]
     routes = extract_route_signals(files)
     methods = {r.method for r in routes}
     paths = {r.path for r in routes}
@@ -86,14 +96,20 @@ def test_fastapi_routes_detected():
 
 
 def test_fastapi_route_line_numbers():
-    files = [FileEntry(path="src/main.py", size=len(FASTAPI_CONTENT), content=FASTAPI_CONTENT)]
+    files = [
+        FileEntry(
+            path="src/main.py", size=len(FASTAPI_CONTENT), content=FASTAPI_CONTENT
+        )
+    ]
     routes = extract_route_signals(files)
     health = next(r for r in routes if r.path == "/health")
     assert health.line_no >= 1
 
 
 def test_fastapi_routes_carry_file_path():
-    files = [FileEntry(path="backend/routers/api.py", size=100, content=FASTAPI_CONTENT)]
+    files = [
+        FileEntry(path="backend/routers/api.py", size=100, content=FASTAPI_CONTENT)
+    ]
     routes = extract_route_signals(files)
     assert all(r.file_path == "backend/routers/api.py" for r in routes)
 
@@ -117,11 +133,13 @@ export async function POST(req: NextRequest) {
 
 
 def test_nextjs_routes_detected():
-    files = [FileEntry(
-        path="src/app/api/generate/route.ts",
-        size=len(NEXTJS_ROUTE_CONTENT),
-        content=NEXTJS_ROUTE_CONTENT,
-    )]
+    files = [
+        FileEntry(
+            path="src/app/api/generate/route.ts",
+            size=len(NEXTJS_ROUTE_CONTENT),
+            content=NEXTJS_ROUTE_CONTENT,
+        )
+    ]
     routes = extract_route_signals(files)
     methods = {r.method for r in routes}
     assert "GET" in methods
@@ -143,7 +161,11 @@ router.delete('/users/:id', (req, res) => res.json({}));
 
 
 def test_express_routes_detected():
-    files = [FileEntry(path="routes/users.js", size=len(EXPRESS_CONTENT), content=EXPRESS_CONTENT)]
+    files = [
+        FileEntry(
+            path="routes/users.js", size=len(EXPRESS_CONTENT), content=EXPRESS_CONTENT
+        )
+    ]
     routes = extract_route_signals(files)
     methods = {r.method for r in routes}
     assert "GET" in methods
@@ -186,7 +208,9 @@ if __name__ == "__main__":
 
 
 def test_npm_scripts_extracted():
-    files = [FileEntry(path="frontend/package.json", size=len(PKG_JSON), content=PKG_JSON)]
+    files = [
+        FileEntry(path="frontend/package.json", size=len(PKG_JSON), content=PKG_JSON)
+    ]
     eps = extract_entrypoints(files)
     names = {e.name for e in eps}
     assert "dev" in names
@@ -209,7 +233,13 @@ def test_cli_module_detected():
 
 
 def test_node_modules_package_json_ignored():
-    files = [FileEntry(path="node_modules/react/package.json", size=10, content='{"scripts": {"test": "jest"}}')]
+    files = [
+        FileEntry(
+            path="node_modules/react/package.json",
+            size=10,
+            content='{"scripts": {"test": "jest"}}',
+        )
+    ]
     eps = extract_entrypoints(files)
     assert eps == []
 

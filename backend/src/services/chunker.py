@@ -5,20 +5,22 @@ import re
 from dataclasses import dataclass
 
 WINDOW_SIZE = 60  # lines per sliding-window chunk
-OVERLAP = 10      # lines of overlap between consecutive sliding windows
+OVERLAP = 10  # lines of overlap between consecutive sliding windows
 STEP = WINDOW_SIZE - OVERLAP
 
 # Semantic boundary patterns
-_PY_BOUNDARY = re.compile(r'^(async def |def |class )')
-_JS_BOUNDARY = re.compile(r'^(export |function |class |const \w[\w$]* = (?:async )?[(\[])')
+_PY_BOUNDARY = re.compile(r"^(async def |def |class )")
+_JS_BOUNDARY = re.compile(
+    r"^(export |function |class |const \w[\w$]* = (?:async )?[(\[])"
+)
 
 
 @dataclass(frozen=True)
 class Chunk:
-    chunk_id: str   # "{path}:{start_line}-{end_line}"
+    chunk_id: str  # "{path}:{start_line}-{end_line}"
     path: str
     start_line: int  # 1-based, inclusive
-    end_line: int    # 1-based, inclusive
+    end_line: int  # 1-based, inclusive
     text: str
 
 
@@ -54,8 +56,8 @@ def _make_chunks_from_lines(
     i = 0
     while i < len(lines):
         end_exclusive = min(i + WINDOW_SIZE, len(lines))
-        start_1 = offset + i + 1          # 1-based
-        end_1 = offset + end_exclusive     # 1-based inclusive
+        start_1 = offset + i + 1  # 1-based
+        end_1 = offset + end_exclusive  # 1-based inclusive
         text = "".join(lines[i:end_exclusive])
         chunks.append(
             Chunk(

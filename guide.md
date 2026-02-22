@@ -162,12 +162,12 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 
 ### Items Pending ❗
 
-* **Step 8** – Frontend proxy route (tests + Vitest setup)
-* **Step 9** – Frontend UI MVP (form, markdown render)
+* **Step 8** – Frontend proxy `/api/generate` route (Vitest setup + route tests)
+* **Step 9** – Frontend UI MVP (form, markdown render, loading/error states)
 * **Step 10** – Frontend real-time status via SSE (backend stub + frontend stream consumer)
-* **Steps 11–19** – Backend pipeline: import graph → search index → LLM → evidence → page writing → pipeline orchestrator → wire endpoints
-* **Step 20** – CI test gating
-* **Step 21** – Navigable wiki pages
+* **Steps 11–19** – Backend pipeline: import graph → search index → LLM client → feature proposals → evidence gathering → page writing → overview page → pipeline orchestrator → wire endpoint
+* **Step 20** – Frontend navigable wiki pages (sidebar, `/wiki/[owner]/[repo]` route)
+* **Step 21** – CI test gating
 * **Step 22** – Final deploy + smoke checks
 
 ---
@@ -609,7 +609,112 @@ Extract *non-LLM* signals that guide feature discovery:
 
 ---
 
-## STEP 8: Backend – File-level Import Graph
+## STEP 8: Frontend – Proxy `/api/generate` Route
+
+### Tasks
+
+1. Implement `frontend/src/app/api/generate/route.ts`:
+
+   * validates request JSON
+   * forwards to `${BACKEND_URL}/api/generate`
+   * injects header `x-api-key: BACKEND_API_KEY`
+   * forwards response
+
+2. Set up Vitest + React Testing Library.
+
+3. Add route tests:
+
+   * mock `global.fetch`
+   * verify header injection
+   * missing body → 400
+   * backend error propagated correctly
+
+### Acceptance Criteria
+
+* [ ] Route proxies correctly
+* [ ] Vitest passes
+
+---
+
+## STEP 9: Frontend – UI MVP (Form + Render)
+
+### Tasks
+
+1. Keep warm-up behavior:
+
+   * on page load: `fetch('/api/health').catch(()=>{})`
+
+2. Build UI:
+
+   * repo URL input
+   * generate button
+   * loading + error
+   * render:
+
+     * overview markdown
+     * features list
+     * feature markdown
+
+3. Use markdown renderer:
+
+   * `react-markdown` + `remark-gfm`
+
+4. Add minimal UI tests:
+
+   * form submits
+   * loading state toggles
+
+### Acceptance Criteria
+
+* [ ] User can generate and read wiki
+
+---
+
+## STEP 10: Frontend – Real-time Status via SSE
+
+### Goal
+
+Show users live progress while the backend pipeline runs.
+
+### Tasks
+
+1. Add a backend SSE stub endpoint `GET /api/generate/stream`:
+
+   * emits progress events: `repo_loaded`, `chunked`, `signals_extracted`, `features_proposed`, `pages_written`, `done`
+   * initially returns stubbed events immediately (real streaming wired in Step 19)
+
+2. Frontend: consume SSE stream on the generate page:
+
+   * display status messages as they arrive
+   * transition to final result on `done` event
+
+3. Tests:
+
+   * backend: SSE endpoint emits expected events in correct format
+   * frontend: status messages render as events are received
+
+### Acceptance Criteria
+
+* [ ] Progress events visible during generation
+* [ ] Backend SSE stub passes tests
+
+---
+<!-- 
+## STEP 11: Frontend – Navigable Wiki Pages
+
+### Tasks
+
+* Add route `/wiki/[owner]/[repo]` for overview
+* Add sidebar with feature list
+* Add anchor links
+
+### Acceptance Criteria
+
+* [ ] Navigable experience
+
+--- -->
+
+## STEP 11: Backend – File-level Import Graph
 
 ### Goal
 
@@ -634,7 +739,7 @@ Create file-to-file dependency graph for evidence expansion.
 
 ---
 
-## STEP 9: Backend – Search Index Over Chunks
+## STEP 12: Backend – Search Index Over Chunks
 
 ### Goal
 
@@ -661,7 +766,7 @@ Enable keyword + lightweight semantic retrieval without heavy infra.
 
 ---
 
-## STEP 10: Backend – LLM Client (Robust JSON)
+## STEP 13: Backend – LLM Client (Robust JSON)
 
 ### Goal
 
@@ -671,7 +776,7 @@ All OpenAI interaction goes through `services/llm.py`.
 
 1. Implement `services/llm.py`:
 
-   * `chat_text(system, user, model, temperature)`
+   * `chat_text(system, user, model="gpt-5-mini", temperature=0.2)` that returns raw text
    * `chat_json(system, user, schema_hint)` that:
 
      * enforces JSON-only output
@@ -695,7 +800,7 @@ All OpenAI interaction goes through `services/llm.py`.
 
 ---
 
-## STEP 11: Backend – Feature Proposals (LLM)
+## STEP 14: Backend – Feature Proposals (LLM)
 
 ### Goal
 
@@ -734,7 +839,7 @@ Generate 5–9 **user-facing** features with entry points.
 
 ---
 
-## STEP 12: Backend – Evidence Gathering (Deterministic + Bounded)
+## STEP 15: Backend – Evidence Gathering (Deterministic + Bounded)
 
 ### Goal
 
@@ -764,7 +869,7 @@ For each feature, assemble evidence chunks for page writing.
 
 ---
 
-## STEP 13: Backend – Page Writing (LLM) With Chunk Citations
+## STEP 16: Backend – Page Writing (LLM) With Chunk Citations
 
 ### Goal
 
@@ -805,7 +910,7 @@ LLM must cite as:
 
 ---
 
-## STEP 14: Backend – Overview Page (LLM)
+## STEP 17: Backend – Overview Page (LLM)
 
 ### Goal
 
@@ -830,7 +935,7 @@ Generate a repo-level overview with citations:
 
 ---
 
-## STEP 15: Backend – Pipeline Orchestrator
+## STEP 18: Backend – Pipeline Orchestrator
 
 ### Goal
 
@@ -860,7 +965,7 @@ One function that runs the full pipeline with stable intermediate artifacts.
 
 ---
 
-## STEP 16: Backend – `/api/generate` Endpoint
+## STEP 19: Backend – `/api/generate` Endpoint
 
 ### Tasks
 
@@ -882,7 +987,7 @@ One function that runs the full pipeline with stable intermediate artifacts.
 
 ---
 
-## STEP 17: Frontend – Proxy `/api/generate` Route
+<!-- ## STEP 17: Frontend – Proxy `/api/generate` Route
 
 ### Tasks
 
@@ -936,9 +1041,9 @@ One function that runs the full pipeline with stable intermediate artifacts.
 
 * [ ] User can generate and read wiki
 
----
+--- -->
 
-## STEP 19: Frontend – Navigable Wiki Pages
+## STEP 20: Frontend – Navigable Wiki Pages
 
 ### Tasks
 
@@ -952,7 +1057,7 @@ One function that runs the full pipeline with stable intermediate artifacts.
 
 ---
 
-## STEP 20: CI – Tests Gate Deploy
+## STEP 21: CI – Tests Gate Deploy
 
 ### Tasks
 
@@ -980,7 +1085,7 @@ One function that runs the full pipeline with stable intermediate artifacts.
 
 ---
 
-## STEP 21: Deploy + Smoke Checks (Every Merge)
+## STEP 22: Deploy + Smoke Checks (Every Merge)
 
 ### Required env vars
 

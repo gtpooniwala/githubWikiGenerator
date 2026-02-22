@@ -13,24 +13,25 @@ from models.repo_snapshot import FileEntry
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class ReadingHeading:
-    level: int    # 1 = H1, 2 = H2, etc.
+    level: int  # 1 = H1, 2 = H2, etc.
     text: str
 
 
 @dataclass(frozen=True)
 class RouteSignal:
-    method: str   # GET, POST, PUT, DELETE, PATCH, ANY
-    path: str     # URL pattern, e.g. "/api/generate"
+    method: str  # GET, POST, PUT, DELETE, PATCH, ANY
+    path: str  # URL pattern, e.g. "/api/generate"
     file_path: str
     line_no: int  # 1-based
 
 
 @dataclass(frozen=True)
 class EntryPoint:
-    kind: str     # "npm-script", "python-main", "cli-module"
-    name: str     # script name or module path
+    kind: str  # "npm-script", "python-main", "cli-module"
+    name: str  # script name or module path
     command: str  # command / module path
 
 
@@ -101,34 +102,40 @@ def extract_route_signals(files: list[FileEntry]) -> list[RouteSignal]:
         if _is_python(f.path):
             for i, line in enumerate(lines):
                 for m in _FASTAPI_ROUTE.finditer(line):
-                    signals.append(RouteSignal(
-                        method=m.group(1).upper(),
-                        path=m.group(2),
-                        file_path=f.path,
-                        line_no=i + 1,
-                    ))
+                    signals.append(
+                        RouteSignal(
+                            method=m.group(1).upper(),
+                            path=m.group(2),
+                            file_path=f.path,
+                            line_no=i + 1,
+                        )
+                    )
 
         elif _is_js_ts(f.path):
             # Express-style routes (all JS/TS)
             for i, line in enumerate(lines):
                 for m in _EXPRESS_ROUTE.finditer(line):
-                    signals.append(RouteSignal(
-                        method=m.group(1).upper(),
-                        path=m.group(2),
-                        file_path=f.path,
-                        line_no=i + 1,
-                    ))
+                    signals.append(
+                        RouteSignal(
+                            method=m.group(1).upper(),
+                            path=m.group(2),
+                            file_path=f.path,
+                            line_no=i + 1,
+                        )
+                    )
 
             # Next.js App Router export handlers
             if "route.ts" in f.path or "route.js" in f.path:
                 for m in _NEXTJS_ROUTE.finditer(f.content):
                     line_no = f.content[: m.start()].count("\n") + 1
-                    signals.append(RouteSignal(
-                        method=m.group(1).upper(),
-                        path=f.path,  # the file path IS the route in Next.js
-                        file_path=f.path,
-                        line_no=line_no,
-                    ))
+                    signals.append(
+                        RouteSignal(
+                            method=m.group(1).upper(),
+                            path=f.path,  # the file path IS the route in Next.js
+                            file_path=f.path,
+                            line_no=line_no,
+                        )
+                    )
 
     return signals
 
@@ -151,26 +158,32 @@ def extract_entrypoints(files: list[FileEntry]) -> list[EntryPoint]:
                 pkg = json.loads(f.content)
                 scripts = pkg.get("scripts", {})
                 for name, cmd in scripts.items():
-                    entrypoints.append(EntryPoint(kind="npm-script", name=name, command=cmd))
+                    entrypoints.append(
+                        EntryPoint(kind="npm-script", name=name, command=cmd)
+                    )
             except (json.JSONDecodeError, AttributeError):
                 pass
 
         # Python __main__ guard
         elif _is_python(f.path) and _PYTHON_MAIN_RE.search(f.content):
-            entrypoints.append(EntryPoint(
-                kind="python-main",
-                name=f.path,
-                command=f"python {f.path}",
-            ))
+            entrypoints.append(
+                EntryPoint(
+                    kind="python-main",
+                    name=f.path,
+                    command=f"python {f.path}",
+                )
+            )
 
         # Dedicated CLI modules
         elif _is_python(f.path) and any(
             f.path.endswith(n) for n in ("__main__.py", "cli.py", "manage.py")
         ):
-            entrypoints.append(EntryPoint(
-                kind="cli-module",
-                name=f.path,
-                command=f"python {f.path}",
-            ))
+            entrypoints.append(
+                EntryPoint(
+                    kind="cli-module",
+                    name=f.path,
+                    command=f"python {f.path}",
+                )
+            )
 
     return entrypoints

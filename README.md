@@ -8,7 +8,7 @@ Automatic wiki generator for public GitHub repositories. Analyses repo code and 
 |-------|------|---------|
 | Frontend | Next.js (App Router, TypeScript) | Cloud Run |
 | Backend | FastAPI (Python 3.12) | Cloud Run |
-| LLM | OpenAI (`gpt-4o-mini`) | backend-only |
+| LLM | OpenAI (`gpt-5-mini`) | backend-only |
 | CI/CD | GitHub Actions + Workload Identity Federation | — |
 
 ```
@@ -104,7 +104,9 @@ Response:
 | 5 | ✅ | GitHub repo snapshot (tree + files) |
 | 6 | ✅ | Chunker (semantic + sliding window) |
 | 7 | ✅ | Signals extraction (README, routes, entrypoints) |
-| 8–21 | 🔲 | Import graph → search index → LLM pipeline → frontend UI |
+| 8–10 | 🔲 | Frontend proxy route + UI MVP + navigable wiki pages |
+| 11–19 | 🔲 | Backend pipeline: import graph → search index → LLM → evidence → page writing → wire endpoint |
+| 20–21 | 🔲 | CI test gating + final deploy + smoke checks |
 
 See [guide.md](guide.md) for full execution spec and current status.
 
