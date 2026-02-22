@@ -18,7 +18,7 @@ The app is fully deployed and ready to use. No setup required.
 
 The output includes an **Overview page** (what the project does, architecture, quickstart) and a set of **Feature pages** — one per user-facing feature, each with inline citations that link to the exact source lines on GitHub at the analysed commit SHA.
 
-> **Note on architecture:** The backend is separate from the frontend and requires an API key to call directly (to prevent abuse, since each request triggers multiple LLM calls). The frontend proxies requests transparently, so from a reviewer's perspective you just use the URL above.
+> **Note on architecture:** The backend is separate from the frontend and requires an API key to call directly. 
 
 **Having trouble?**
 
@@ -71,7 +71,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 uvicorn main:app --reload --port 8080 --app-dir src
 ```
 
-**Required env vars** — defined in `.env` at the project root (gitignored):
+**Required env vars** — defined in `.env` at the project root:
 
 ```
 BACKEND_API_KEY=<app auth key>
@@ -146,7 +146,7 @@ The full wiki (overview + all feature pages) is passed as context in a single LL
 
 ## How It Works
 
-The backend runs a deterministic multi-stage pipeline when a repo URL is submitted. Every stage feeds the next; no stage touches the LLM unless noted.
+The backend runs a deterministic multi-stage pipeline when a repo URL is submitted. Every stage feeds the next; no stage makes LLM calls unless noted.
 
 ```
 GitHub URL
@@ -240,8 +240,9 @@ This project was built for the **cubic Coding Challenge** — a 48-hour sprint t
 - **Parallel feature page writing** — feature pages are written sequentially (one LLM call completes before the next starts). All evidence packs are independent so this is trivially parallelisable with a thread pool, cutting total LLM wall-clock time from ~N×4s to ~4s regardless of feature count.
 - **Seed path and citation validation** — the LLM sometimes returns `seed_paths` that don't exist in the snapshot, silently producing thin evidence packs. Separately, the citation resolver converts any `[path:N-M]` pattern to a GitHub URL without checking the path was actually analyzed; hallucinated paths become valid-looking links that 404. Both are fixable with a membership check against the known file list and chunk ID set.
 - **Richer feature proposal context** — the LLM currently sees only file paths, README headings, and HTTP routes when proposing features. Adding the top-level symbol names per file (function/class names already identified by the chunker's semantic boundary pass) would give it real code signal at near-zero token cost and improve seed path accuracy for repos with sparse READMEs.
-- **Caching** — cache generated wikis keyed by `(owner, repo, commit_sha)` so repeat requests on the same commit are instant and don't burn OpenAI quota.
-
+- **Caching** — cache generated wikis or downloaded files keyed by `(owner, repo, commit_sha)` so repeat requests on the same commit are instant and don't burn OpenAI quota.
+- **Chunking strategy** — the current line-based chunking is simple and robust across languages, but it produces noisy chunks that split logical blocks of code. A smarter strategy(eg. AST based) that respects function and class boundaries would produce more coherent feature pages with fewer citations. It would need to be tested against a variety of languages and styles to ensure it doesnt fail on less common ones, but it would be a big win for codebases that follow common conventions.
+- **Q&A chat history** — the "Ask the wiki" sidebar panel currently has no persistent conversation history; each question is answered in isolation with no memory of prior turns. Implementing a React context (or Zustand store) to retain `qaPairs` at the app level, combined with a multi-turn prompt that includes prior exchanges, would let users build on previous answers and reference earlier responses. Session storage could persist the history across page navigations without any backend changes.
 
 ### Bonus features implemented
 
@@ -249,10 +250,11 @@ This project was built for the **cubic Coding Challenge** — a 48-hour sprint t
 
 ### What isn’t production-ready
 
+- **Scaling testing** — the system is only tested against a handful of small-to-medium repos. It should work in theory on any public GitHub repo, but without testing against a wider variety of codebases, languages and styles there may be edge cases that break the pipeline or produce poor output.
 - **No rate limiting** on the `/api/generate` endpoint — a single request triggers 10+ LLM calls and GitHub API fetches; without throttling this is DoS-able.
 - **No request queuing** — concurrent generate requests will compete for OpenAI quota and GitHub rate limits.
 - **Single Cloud Run instance** — the backend is stateless but cold-start latency (2–4 s) would need a min-instances setting for production traffic.
-- **Citation hallucination** — the LLM occasionally cites plausible-but-wrong line ranges; a post-generation step that checks cited ranges against the actual analyzed chunks (stripping or flagging those that don't match) would improve trust without requiring a second LLM call.
+- **Citation hallucination** — the LLM can cite plausible-but-wrong line ranges; a post-generation step that checks cited ranges against the actual analyzed chunks (stripping or flagging those that don't match) would improve trust without requiring a second LLM call.
 - **No tests for the full live pipeline** — all LLM calls are mocked in tests; a lightweight integration test against a small known repo would catch prompt-regressions.
 
 ## Deployment

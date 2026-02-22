@@ -55,6 +55,7 @@ export default function Home() {
   const [statusMessages, setStatusMessages] = useState<StatusMessage[]>([]);
   const [healthStatus, setHealthStatus] = useState<HealthStatus>('idle');
   const [wikiData, setWikiData] = useState<GenerateResponse | null>(null);
+  const [logsExpanded, setLogsExpanded] = useState(false);
 
   const checkHealth = useCallback(async () => {
     setHealthStatus('checking');
@@ -78,6 +79,7 @@ export default function Home() {
     setError(null);
     setStatusMessages([]);
     setWikiData(null);
+    setLogsExpanded(false);
 
     const es = new EventSource(`/api/generate/stream?repo_url=${encodeURIComponent(repoUrl)}`);
 
@@ -95,6 +97,7 @@ export default function Home() {
           setWikiData(parsed as unknown as GenerateResponse);
           setLoading(false);
           setDone(true);
+          setLogsExpanded(false); // collapse log when done
         }
       });
     });
@@ -116,9 +119,13 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+    <div className={
+      wikiData && !loading
+        ? 'h-screen flex flex-col overflow-hidden bg-white'
+        : 'min-h-screen bg-gradient-to-b from-slate-50 to-white'
+    }>
       {/* Header */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-10 shrink-0">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-3">
           <span className="text-2xl" aria-hidden="true">📚</span>
           <div>
@@ -128,7 +135,6 @@ export default function Home() {
 
           {/* Health check — pushed to top-right */}
           <div className="ml-auto flex items-center gap-2">
-            {/* Status indicator */}
             {healthStatus !== 'idle' && (
               <span
                 aria-label={`Backend status: ${healthStatus}`}
@@ -165,79 +171,135 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Hero + Form */}
-      <section className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
-            Generate developer docs in one click
-          </h2>
-          <p className="text-slate-500 text-lg max-w-xl mx-auto">
-            Paste a public GitHub repository URL and get a navigable wiki organized by user-facing features.
-          </p>
-        </div>
+      {wikiData && !loading ? (
+        /* ── WIKI MODE: compact controls bar + full-height viewer ── */
+        <>
+          {/* Compact bar: form + SSE summary */}
+          <div className="shrink-0 border-b border-slate-200 bg-slate-50">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center gap-3">
+              {/* Form — compressed */}
+              <div className="flex-1 min-w-0 max-w-lg">
+                <RepoForm onSubmit={handleGenerate} loading={loading} />
+              </div>
 
-        <div className="max-w-2xl mx-auto">
-          <RepoForm onSubmit={handleGenerate} loading={loading} />
-        </div>
+              {/* SSE summary chip + dropdown */}
+              {statusMessages.length > 0 && (
+                <div className="relative shrink-0">
+                  <button
+                    onClick={() => setLogsExpanded((v) => !v)}
+                    className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+                    {statusMessages.length} steps completed
+                    <span className="ml-0.5 text-slate-400">{logsExpanded ? '▲' : '▼'}</span>
+                  </button>
 
-        {/* Error state */}
-        {error && (
-          <div
-            role="alert"
-            className="mt-6 max-w-2xl mx-auto p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3 text-sm text-red-700"
-          >
-            <span className="shrink-0">❌</span>
-            <span>{error}</span>
+                  {logsExpanded && (
+                    <div className="absolute right-0 top-full mt-1 z-30 w-80 bg-white border border-slate-200 rounded-lg shadow-lg">
+                      <div className="p-2 border-b border-slate-100 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Generation log</span>
+                        <button
+                          onClick={() => setLogsExpanded(false)}
+                          className="text-slate-400 hover:text-slate-600 text-xs px-1"
+                        >✕</button>
+                      </div>
+                      <ul className="max-h-72 overflow-y-auto p-2 space-y-1">
+                        {statusMessages.map((msg, i) => (
+                          <li key={i} className="flex items-baseline gap-2 text-xs text-slate-500">
+                            <span className="shrink-0 text-green-500">✓</span>
+                            <span>
+                              {msg.label}
+                              {msg.detail && <span className="ml-1 text-slate-400">({msg.detail})</span>}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {error && (
+                <div role="alert" className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5">
+                  <span>❌</span><span>{error}</span>
+                </div>
+              )}
+            </div>
           </div>
-        )}
 
-        {/* Spinner — only while loading */}
-        {loading && (
-          <div
-            role="status"
-            aria-label="Generating wiki"
-            className="mt-10 flex flex-col items-center gap-4 text-slate-500"
-          >
-            <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-            {statusMessages.length === 0 && (
-              <p className="text-sm">Analyzing repository and generating wiki…</p>
-            )}
+          {/* Full-height wiki */}
+          <div className="flex-1 overflow-hidden px-4 sm:px-6 py-4 max-w-[1400px] w-full mx-auto">
+            <WikiViewer data={wikiData} />
           </div>
-        )}
+        </>
+      ) : (
+        /* ── HERO MODE: generation form + inline SSE progress ── */
+        <section className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
+              Generate developer docs in one click
+            </h2>
+            <p className="text-slate-500 text-lg max-w-xl mx-auto">
+              Paste a public GitHub repository URL and get a navigable wiki organized by user-facing features.
+            </p>
+          </div>
 
-        {/* SSE status log — visible during AND after loading */}
-        {statusMessages.length > 0 && (
-          <ul className="mt-6 max-w-2xl mx-auto space-y-1">
-            {statusMessages.map((msg, i) => {
-              const isLast = i === statusMessages.length - 1;
-              return (
-                <li
-                  key={i}
-                  className={`flex items-baseline gap-2 text-sm ${
-                    isLast && loading ? 'text-blue-600 font-medium' : 'text-slate-500'
-                  }`}
-                >
-                  <span className="shrink-0 w-4 text-center">
-                    {isLast && loading ? '▶' : '✓'}
-                  </span>
-                  <span>
-                    {msg.label}
-                    {msg.detail && <span className="ml-1 text-slate-400">({msg.detail})</span>}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+          <div className="max-w-2xl mx-auto">
+            <RepoForm onSubmit={handleGenerate} loading={loading} />
+          </div>
 
-      {/* Wiki result */}
-      {wikiData && !loading && (
-        <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-16">
-          <WikiViewer data={wikiData} />
+          {/* Error state */}
+          {error && (
+            <div
+              role="alert"
+              className="mt-6 max-w-2xl mx-auto p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3 text-sm text-red-700"
+            >
+              <span className="shrink-0">❌</span>
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Spinner — only while loading */}
+          {loading && (
+            <div
+              role="status"
+              aria-label="Generating wiki"
+              className="mt-10 flex flex-col items-center gap-4 text-slate-500"
+            >
+              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              {statusMessages.length === 0 && (
+                <p className="text-sm">Analyzing repository and generating wiki…</p>
+              )}
+            </div>
+          )}
+
+          {/* SSE status log — visible while loading */}
+          {statusMessages.length > 0 && loading && (
+            <ul className="mt-6 max-w-2xl mx-auto space-y-1">
+              {statusMessages.map((msg, i) => {
+                const isLast = i === statusMessages.length - 1;
+                return (
+                  <li
+                    key={i}
+                    className={`flex items-baseline gap-2 text-sm ${
+                      isLast && loading ? 'text-blue-600 font-medium' : 'text-slate-500'
+                    }`}
+                  >
+                    <span className="shrink-0 w-4 text-center">
+                      {isLast && loading ? '▶' : '✓'}
+                    </span>
+                    <span>
+                      {msg.label}
+                      {msg.detail && <span className="ml-1 text-slate-400">({msg.detail})</span>}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
       )}
     </div>

@@ -51,13 +51,14 @@ export function WikiViewer({ data }: WikiViewerProps) {
   );
 
   return (
-    <div className="flex flex-col lg:flex-row gap-0 border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+    <div className="flex flex-col lg:flex-row border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm h-full">
       {/* Sidebar */}
       <nav
         aria-label="Wiki sections"
-        className="w-full lg:w-64 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50"
+        className="w-full lg:w-72 shrink-0 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50 overflow-hidden"
       >
-        <div className="p-4 border-b border-slate-200">
+        {/* Repo info — fixed */}
+        <div className="p-4 border-b border-slate-200 shrink-0">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Repository</p>
           <a
             href={`https://github.com/${data.repo_id}`}
@@ -72,7 +73,8 @@ export function WikiViewer({ data }: WikiViewerProps) {
           </p>
         </div>
 
-        <ul className="p-2">
+        {/* Nav list — scrollable */}
+        <ul className="flex-1 overflow-y-auto p-2">
           <li>
             <button
               onClick={() => setActiveFeatureId('__overview__')}
@@ -110,10 +112,84 @@ export function WikiViewer({ data }: WikiViewerProps) {
             </>
           )}
         </ul>
+
+        {/* Q&A panel — pinned at the bottom of the sidebar */}
+        <section
+          className="shrink-0 border-t border-slate-200 bg-white"
+          aria-label="Wiki Q&A"
+        >
+          <div className="px-3 pt-3 pb-1 flex items-center justify-between">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ask the wiki</p>
+          </div>
+
+          {/* Conversation history */}
+          {qaPairs.length > 0 && (
+            <div ref={qaHistoryRef} className="max-h-52 overflow-y-auto px-3 pb-2 space-y-3">
+              {qaPairs.map((pair, i) => (
+                <div key={i} className="text-xs">
+                  <p className="font-medium text-slate-700 mb-1">
+                    <span className="text-slate-400 mr-0.5" aria-hidden="true">Q:</span>
+                    {' '}
+                    <span>{pair.question}</span>
+                  </p>
+                  <div className="pl-2 border-l-2 border-blue-200 text-slate-500 prose prose-xs max-w-none">
+                    <Markdown content={pair.answer} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Error */}
+          {qaError && (
+            <div
+              role="alert"
+              className="mx-3 mb-2 px-2 py-1.5 bg-red-50 border border-red-200 rounded text-xs text-red-700"
+            >
+              {qaError}
+            </div>
+          )}
+
+          {/* Input */}
+          <form onSubmit={handleAsk} className="flex flex-col gap-1.5 p-3 pt-1">
+            <input
+              type="text"
+              value={qaInput}
+              onChange={(e) => setQaInput(e.target.value)}
+              placeholder="e.g. How does auth work?"
+              disabled={qaLoading}
+              aria-label="Ask a question about this wiki"
+              className="w-full px-2.5 py-2 rounded-md border border-slate-300 bg-white text-xs
+                text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2
+                focus:ring-blue-500 focus:border-transparent disabled:opacity-50
+                disabled:cursor-not-allowed"
+            />
+            <button
+              type="submit"
+              disabled={qaLoading || !qaInput.trim()}
+              aria-label={qaLoading ? 'Waiting for answer' : 'Ask question'}
+              className="w-full px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs font-medium
+                hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50
+                disabled:cursor-not-allowed transition-colors"
+            >
+              {qaLoading ? (
+                <span className="flex items-center justify-center gap-1.5">
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Asking…
+                </span>
+              ) : (
+                'Ask'
+              )}
+            </button>
+          </form>
+        </section>
       </nav>
 
-      {/* Content pane */}
-      <main className="flex-1 p-6 lg:p-8 min-w-0 overflow-auto">
+      {/* Content pane — independently scrollable */}
+      <main className="flex-1 p-6 lg:p-8 min-w-0 overflow-y-auto">
         {showOverview ? (
           <>
             <h1 className="text-2xl font-bold text-slate-900 mb-4">Overview</h1>
@@ -132,82 +208,8 @@ export function WikiViewer({ data }: WikiViewerProps) {
             <Markdown content={activeFeature.content_md} />
           </>
         ) : null}
-
-        {/* Q&A panel */}
-        <section
-          className="mt-10 pt-8 border-t border-slate-200"
-          aria-label="Wiki Q&A"
-        >
-          <h2 className="text-lg font-semibold text-slate-800 mb-1">Ask the wiki</h2>
-          <p className="text-sm text-slate-500 mb-4">
-            Ask anything about{' '}
-            <span className="font-medium text-slate-700">{data.repo_id}</span>{' '}
-            — the full generated wiki is used as context.
-          </p>
-
-          {/* Conversation history */}
-          {qaPairs.length > 0 && (
-            <div ref={qaHistoryRef} className="mb-4 space-y-4">
-              {qaPairs.map((pair, i) => (
-                <div key={i} className="rounded-lg border border-slate-200 overflow-hidden">
-                  <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-                    <p className="text-sm font-medium text-slate-700">{pair.question}</p>
-                  </div>
-                  <div className="px-4 py-3">
-                    <Markdown content={pair.answer} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Error */}
-          {qaError && (
-            <div
-              role="alert"
-              className="mb-3 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"
-            >
-              {qaError}
-            </div>
-          )}
-
-          {/* Input */}
-          <form onSubmit={handleAsk} className="flex gap-2">
-            <input
-              type="text"
-              value={qaInput}
-              onChange={(e) => setQaInput(e.target.value)}
-              placeholder="e.g. How does authentication work?"
-              disabled={qaLoading}
-              aria-label="Ask a question about this wiki"
-              className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-sm
-                text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2
-                focus:ring-blue-500 focus:border-transparent disabled:opacity-50
-                disabled:cursor-not-allowed"
-            />
-            <button
-              type="submit"
-              disabled={qaLoading || !qaInput.trim()}
-              aria-label={qaLoading ? 'Waiting for answer' : 'Ask question'}
-              className="px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium
-                hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50
-                disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-            >
-              {qaLoading ? (
-                <span className="flex items-center gap-2">
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                  Asking…
-                </span>
-              ) : (
-                'Ask'
-              )}
-            </button>
-          </form>
-        </section>
       </main>
     </div>
   );
 }
+
