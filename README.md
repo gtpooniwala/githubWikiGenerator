@@ -107,22 +107,74 @@ Response:
 
 ## How It Works
 
-The backend runs a multi-stage pipeline when a repo URL is submitted:
+The backend runs a deterministic multi-stage pipeline when a repo URL is submitted. Every stage feeds the next; no stage touches the LLM unless noted.
 
-1. **Snapshot** — fetches the repo tree and downloads included source files via GitHub REST API
-2. **Filter** — excludes binaries, build artefacts, and oversized files
-3. **Chunk** — splits each file into semantically bounded chunks with stable `path:start-end` IDs
-4. **Signals** — extracts README headings, API routes, and entry points without LLM calls
-5. **Import graph** — builds a file-to-file dependency graph (Python + JS/TS) for evidence expansion
-6. **Search index** — BM25 keyword index over all chunks for feature-scoped retrieval
-7. **Feature proposals** — LLM identifies 5–9 user-facing features with seed file paths
-8. **Evidence gathering** — assembles bounded evidence packs per feature via seed files + import graph expansion + search hits
-9. **Page writing** — LLM generates markdown per feature with inline chunk citations converted to GitHub permalink URLs
-10. **Overview** — repo-level summary generated from README + entry points
+```
+GitHub URL
+    │
+    ▼
+ 1. Parse URL          extract owner + repo from the URL
+    │
+    ▼
+ 2. Load Snapshot      fetch git tree + file contents via GitHub REST API
+    │                  (pinned to the latest commit SHA)
+    ▼
+ 3. Filter Files       drop binaries, generated files, build artefacts,
+    │                  and files above the size limit
+    ▼
+ 4. Extract Signals    scan files for README headings, HTTP route
+    │                  definitions, and entry-point files — no LLM
+    ▼
+ 5. Chunk Files        split every file into line-numbered text chunks
+    │                  with stable IDs ("path:start-end")
+    ▼
+ 6. Build Import Graph map file-to-file import relationships for
+    │                  Python and JS/TS to enable evidence expansion
+    ▼
+ 7. Build Search Index BM25 keyword index over all chunks for fast
+    │                  per-feature retrieval
+    ▼
+ 8. Propose Features ◆ LLM call — identify 5–9 user-facing features,
+    │                  each with a title + seed file paths
+    ▼
+ 9. Gather Evidence    per feature: seed files → import-graph expansion
+    │                  → BM25 search → deduplicated bounded chunk pack
+    ▼
+10. Write Feature      ◆ LLM call per feature — generate markdown with
+    Pages              inline citations; citations are converted to
+    │                  stable GitHub permalink URLs (owner/repo/blob/SHA#Lx)
+    ▼
+11. Write Overview   ◆ LLM call — repo-level summary generated from
+    Page               README + manifest files + entry points
+    │
+    ▼
+12. Assemble           return GenerateResponse: commit SHA, overview
+    Response           markdown, and list of feature pages
+```
 
-Progress events are streamed to the browser via SSE (`GET /api/generate/stream`) so users see live status updates while the pipeline runs.
+### Stage details
+
+| # | Stage | Service | LLM? |
+|---|-------|---------|------|
+| 1 | Parse URL | `pipeline.py` | — |
+| 2 | Load snapshot | `repo_loader.py` → GitHub REST API | — |
+| 3 | Filter files | `file_filter.py` | — |
+| 4 | Extract signals | `signals.py` (headings, routes, entrypoints) | — |
+| 5 | Chunk files | `chunker.py` | — |
+| 6 | Build import graph | `import_graph.py` (Python `import` + JS/TS `import`/`require`) | — |
+| 7 | Build search index | `search_index.py` (BM25) | — |
+| 8 | Propose features | `propose_features.py` | ✓ `gpt-4o-mini` |
+| 9 | Gather evidence | `evidence.py` (seed → graph expand → BM25 → dedup) | — |
+| 10 | Write feature pages | `write_pages.py` → `citations.py` (chunk ID → permalink) | ✓ `gpt-4o-mini` × N |
+| 11 | Write overview | `write_pages.py` | ✓ `gpt-4o-mini` |
+| 12 | Assemble response | `pipeline.py` | — |
+
+### SSE streaming
+
+Progress events are pushed to the browser via Server-Sent Events (`GET /api/generate/stream`) so users see live status updates as each stage completes. The full blocking `run_pipeline()` then runs via a normal `POST /api/generate` call once the stream signals `done`.
 
 See [guide.md](guide.md) for the full execution spec.
+
 
 ## Challenge Notes
 
