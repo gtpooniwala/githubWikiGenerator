@@ -104,8 +104,8 @@ Step X: <short name>
 | — | Fix SSE stream flush | `2a31a7a` | `generate.py` — emit events one-by-one with `asyncio.sleep(0)` flush; `connecting` event added; 2 test updates |
 | 15 | Evidence gathering | `0bee742` | `services/evidence.py` — seed→import-graph BFS→search hits, dedup, max_chunks/max_chars bounds; 24 tests |
 | 16 | Page writing + citations | `pending` | `services/citations.py` + `services/write_pages.py` — [path:start-end] → GitHub permalink links; per-feature LLM page writer; 38 tests |
-| 17 | Overview page | `pending` | `write_overview_page()` in `services/write_pages.py` — README+manifests+entrypoints evidence; 13 new tests; 263 total |
-| 18 | Pipeline orchestrator | `pending` | `services/pipeline.py` — `run_pipeline()` wires all stages; `test_pipeline_smoke.py` 21 tests; 284 total |
+| 17 | Overview page | `5278916` | `write_overview_page()` in `services/write_pages.py` — README+manifests+entrypoints evidence; 13 new tests; 263 total |
+| 18 | Pipeline orchestrator | `8259cc5` | `services/pipeline.py` — `run_pipeline()` wires all stages; `test_pipeline_smoke.py` 21 tests; 284 total |
 
 **284 backend tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`, `test_generate_stream`, `test_import_graph`, `test_search_index`, `test_llm`, `test_propose_features`, `test_evidence`, `test_citations`, `test_write_pages`, `test_pipeline_smoke`.
 **25 frontend tests passing**: `route-generate.test.ts` (7) + `route-stream.test.ts` (5) + `ui-basic.test.tsx` (13).
