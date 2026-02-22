@@ -253,16 +253,19 @@ describe('Home page', () => {
     expect(es.url).toContain(encodeURIComponent('https://github.com/owner/repo'));
 
     act(() => es.emit('repo_loaded', { message: 'Repository loaded', file_count: 42, commit_sha: 'abc1234' }));
-    await waitFor(() => expect(screen.getByText(/repository loaded/i)).toBeInTheDocument());
-    expect(screen.getByText(/42 files/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/load repository files/i)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /load repository files/i }));
+    expect(await screen.findByText(/42 files/)).toBeInTheDocument();
 
     act(() => es.emit('chunked', { message: 'Files chunked', chunk_count: 99 }));
-    await waitFor(() => expect(screen.getByText(/files chunked/i)).toBeInTheDocument());
-    expect(screen.getByText(/99 chunks/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/chunk source files/i)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /chunk source files/i }));
+    expect(await screen.findByText(/99 chunks/)).toBeInTheDocument();
 
     act(() => es.emit('signals_extracted', { message: 'Signals extracted', routes: 5, headings: 8, entrypoints: 2 }));
-    await waitFor(() => expect(screen.getByText(/signals extracted/i)).toBeInTheDocument());
-    expect(screen.getByText(/5 routes/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/extract signals/i)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /extract signals/i }));
+    expect(await screen.findByText(/5 routes/)).toBeInTheDocument();
   });
 });
 

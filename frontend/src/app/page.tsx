@@ -41,39 +41,60 @@ interface StatusMessage {
 
 // ── Verbose event copy ───────────────────────────────────────────────────────
 
-const EVENT_VERBOSE: Record<string, string> = {
-  connecting:          'Connecting to backend and fetching repository metadata…',
-  repo_loaded:         'Repository loaded — scanned all files and recorded the latest commit',
-  signals_extracted:   'Signals extracted — identified API routes, doc headings, and entrypoints',
-  chunked:             'Files chunked — split source files into overlapping searchable segments',
-  import_graph_built:  'Import graph built — mapped every module dependency edge',
-  search_index_built:  'Search index built — embedded all chunks for semantic retrieval',
-  features_proposed:   'Features proposed — asked the LLM to identify key user-facing features',
-  evidence_gathered:   'Evidence gathered — retrieved supporting code snippets per feature',
-  pages_written:       'Pages written — generated detailed documentation for each feature',
-  overview_written:    'Overview written — composed the high-level repository summary',
-  done:                '✅ Wiki generation complete!',
+const EVENT_TITLE: Record<string, string> = {
+  connecting:          'Connect to repository',
+  repo_loaded:         'Load repository files',
+  signals_extracted:   'Extract signals',
+  chunked:             'Chunk source files',
+  import_graph_built:  'Build import graph',
+  search_index_built:  'Build search index',
+  features_proposed:   'Propose features',
+  evidence_gathered:   'Gather evidence',
+  pages_written:       'Write feature pages',
+  overview_written:    'Write overview page',
+  done:                'Complete',
 };
 
-const EVENT_BADGE_COLOR: Record<string, string> = {
-  connecting:         'bg-slate-100 text-slate-500',
-  repo_loaded:        'bg-blue-50 text-blue-600',
-  signals_extracted:  'bg-violet-50 text-violet-600',
-  chunked:            'bg-orange-50 text-orange-600',
-  import_graph_built: 'bg-cyan-50 text-cyan-700',
-  search_index_built: 'bg-teal-50 text-teal-700',
-  features_proposed:  'bg-indigo-50 text-indigo-600',
-  evidence_gathered:  'bg-yellow-50 text-yellow-700',
-  pages_written:      'bg-emerald-50 text-emerald-700',
-  overview_written:   'bg-green-50 text-green-700',
-  done:               'bg-green-100 text-green-800',
+// One or two sentences explaining what the step does and why.
+const EVENT_DESCRIPTION: Record<string, string> = {
+  connecting:
+    'Establishes a connection to the backend and prepares to fetch repository data from GitHub.',
+  repo_loaded:
+    'Downloads the full file tree and content of the repository from GitHub. ' +
+    'Files are fetched in parallel and filtered to exclude binaries, build artefacts, and lock files.',
+  signals_extracted:
+    'Scans the codebase for structural signals: HTTP route definitions, README headings, and application entrypoints. ' +
+    'These signals help the LLM understand what the repository does before reading any code.',
+  chunked:
+    'Splits every source file into overlapping text segments. ' +
+    'Overlapping windows preserve context across chunk boundaries and improve the accuracy of later search and retrieval.',
+  import_graph_built:
+    'Builds a directed graph of module-level import relationships across the codebase. ' +
+    'Used during evidence gathering to find files that are closely related to a given feature.',
+  search_index_built:
+    'Creates a BM25 keyword search index over all chunks. ' +
+    'This index is queried during evidence gathering to surface the most relevant code for each feature.',
+  features_proposed:
+    'Asks the LLM to identify the key user-facing features of this repository, informed by the signals, README, and file structure. ' +
+    'Each proposed feature becomes a dedicated wiki page.',
+  evidence_gathered:
+    'For each proposed feature, retrieves the most relevant code snippets using the search index and import graph. ' +
+    'This grounding evidence is passed to the LLM when writing documentation to minimise hallucination.',
+  pages_written:
+    'Generates a full documentation page for each feature using the LLM, grounded in the retrieved code evidence. ' +
+    'Citations link back to the exact source files used.',
+  overview_written:
+    'Generates the high-level repository overview using the README, manifest files, and detected entrypoints. ' +
+    'This becomes the landing page of the wiki.',
+  done:
+    'All pipeline stages complete. The wiki is ready to view.',
 };
 
 function parseStatusMessage(
   event: string,
   data: Record<string, unknown>,
 ): Pick<StatusMessage, 'label' | 'detail' | 'longDetail'> {
-  const label = EVENT_VERBOSE[event] ?? event;
+  const label = EVENT_TITLE[event] ?? event;
 
   switch (event) {
     case 'repo_loaded': {
@@ -155,75 +176,98 @@ const TABS: TabDef[] = [
 
 function CollapsibleStatusItem({
   msg,
+  stepNumber,
   isActive,
   isLoading,
 }: {
   msg: StatusMessage;
+  stepNumber: number;
   isActive: boolean;
   isLoading: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const badgeClass = EVENT_BADGE_COLOR[msg.eventType] ?? 'bg-slate-100 text-slate-500';
+  const description = EVENT_DESCRIPTION[msg.eventType];
 
   return (
-    <li className={`rounded-lg border transition-colors ${
-      isActive && isLoading
-        ? 'border-blue-200 bg-blue-50'
-        : 'border-slate-100 bg-white'
-    }`}>
-      <div className="flex items-start gap-3 px-4 py-3">
+    <li>
+      {/* ── Row: step number · icon · title · timestamp · Details toggle ── */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-3 py-2.5 text-left group"
+        aria-expanded={open}
+      >
+        {/* Step number pill */}
+        <span className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-xs font-bold ${
+          isActive && isLoading
+            ? 'bg-blue-600 text-white'
+            : 'bg-slate-100 text-slate-500'
+        }`}>
+          {stepNumber}
+        </span>
+
         {/* Status icon */}
-        <span className="mt-0.5 shrink-0 text-base" aria-hidden="true">
+        <span className="shrink-0" aria-hidden="true">
           {isActive && isLoading ? (
-            <svg className="animate-spin h-4 w-4 text-blue-500 mt-0.5" viewBox="0 0 24 24" fill="none">
+            <svg className="animate-spin h-4 w-4 text-blue-500" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
           ) : (
-            <span className="text-green-500">✓</span>
+            <svg className="h-4 w-4 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
           )}
         </span>
 
-        {/* Body */}
-        <div className="flex-1 min-w-0">
-          {/* Event badge */}
-          <span className={`inline-block text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded mb-1 ${badgeClass}`}>
-            {msg.eventType}
-          </span>
-
-          {/* Label sentence */}
-          <p className={`text-sm leading-snug ${isActive && isLoading ? 'text-blue-700 font-medium' : 'text-slate-700'}`}>
-            {msg.label}
-          </p>
-
-          {/* Inline detail */}
-          {msg.detail && (
-            <p className="mt-0.5 text-xs text-slate-500">{msg.detail}</p>
-          )}
-
-          {/* Collapsible long detail */}
-          {msg.longDetail && (
-            <>
-              <button
-                onClick={() => setOpen((v) => !v)}
-                className="mt-1 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
-              >
-                <span>{open ? '▾ Hide details' : '▸ Show details'}</span>
-              </button>
-              {open && (
-                <pre className="mt-2 p-2 rounded bg-slate-50 border border-slate-200 text-xs text-slate-600 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
-                  {msg.longDetail}
-                </pre>
-              )}
-            </>
-          )}
-        </div>
+        {/* Title */}
+        <span className={`flex-1 text-sm font-medium ${
+          isActive && isLoading ? 'text-blue-700' : 'text-slate-800'
+        }`}>
+          {msg.label}
+        </span>
 
         {/* Timestamp */}
-        <span className="shrink-0 text-[10px] text-slate-400 font-mono mt-0.5">
+        <span className="shrink-0 text-[11px] text-slate-400 font-mono">
           {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </span>
-      </div>
+
+        {/* Details toggle */}
+        <span className="shrink-0 text-xs text-slate-400 group-hover:text-slate-600 transition-colors flex items-center gap-0.5">
+          Details
+          <svg className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+        </span>
+      </button>
+
+      {/* ── Expanded details panel ── */}
+      {open && (
+        <div className="ml-10 mb-2 pl-4 border-l-2 border-slate-200 space-y-2">
+          {/* What this step does */}
+          {description && (
+            <p className="text-xs text-slate-500 leading-relaxed">{description}</p>
+          )}
+
+          {/* Output */}
+          {msg.detail && (
+            <div className="flex gap-2 text-xs">
+              <span className="shrink-0 font-semibold text-slate-400 uppercase tracking-wider">Output</span>
+              <span className="text-slate-600">{msg.detail}</span>
+            </div>
+          )}
+
+          {/* Long detail (e.g. feature list) */}
+          {msg.longDetail && (
+            <div className="text-xs">
+              <p className="font-semibold text-slate-400 uppercase tracking-wider mb-1">Features</p>
+              <pre className="whitespace-pre-wrap text-slate-600 leading-relaxed">{msg.longDetail}</pre>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Divider between steps */}
+      <div className="ml-10 border-t border-slate-100" />
     </li>
   );
 }
@@ -519,11 +563,12 @@ export default function Home() {
                     <p className="text-sm">Start a generation from the <strong>Home</strong> tab to see live progress here.</p>
                   </div>
                 ) : (
-                  <ul className="space-y-2">
+                  <ul>
                     {statusMessages.map((msg, i) => (
                       <CollapsibleStatusItem
                         key={i}
                         msg={msg}
+                        stepNumber={i + 1}
                         isActive={i === statusMessages.length - 1}
                         isLoading={loading}
                       />

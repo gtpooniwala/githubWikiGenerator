@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
-const API_KEY = process.env.BACKEND_API_KEY || '';
+const BACKEND_API_KEY = process.env.BACKEND_API_KEY || '';
 
 export async function GET(request: NextRequest) {
   const repoUrl = request.nextUrl.searchParams.get('repo_url');
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   try {
     const response = await fetch(backendUrl.toString(), {
       headers: {
-        'x-api-key': API_KEY,
+        'x-api-key': BACKEND_API_KEY,
         Accept: 'text/event-stream',
       },
     });

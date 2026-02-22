@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
-const API_KEY = process.env.BACKEND_API_KEY || '';
+const BACKEND_API_KEY = process.env.BACKEND_API_KEY || '';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': API_KEY,
+        'x-api-key':BACKEND_API_KEY,
       },
       body: JSON.stringify({ question, repo_id, overview_md, features: features ?? [] }),
     });
