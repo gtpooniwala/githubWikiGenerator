@@ -1,0 +1,13 @@
+{
+  "sha": "abc123def456abc123def456abc123def456abc1",
+  "tree": [
+    {"path": "README.md",        "type": "blob", "size": 512},
+    {"path": "main.py",          "type": "blob", "size": 1024},
+    {"path": "utils.py",         "type": "blob", "size": 200},
+    {"path": "requirements.txt", "type": "blob", "size": 80},
+    {"path": "image.png",        "type": "blob", "size": 20000},
+    {"path": "node_modules/lodash/index.js", "type": "blob", "size": 500},
+    {"path": "big_file.py",      "type": "blob", "size": 200000},
+    {"path": "src/",             "type": "tree", "size": 0}
+  ]
+}

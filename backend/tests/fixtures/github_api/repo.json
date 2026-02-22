@@ -1,0 +1,8 @@
+{
+  "id": 123456,
+  "name": "sample-repo",
+  "full_name": "owner/sample-repo",
+  "default_branch": "main",
+  "private": false,
+  "description": "A sample repo for testing"
+}

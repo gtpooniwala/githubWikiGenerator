@@ -1,0 +1,7 @@
+{
+  "ref": "refs/heads/main",
+  "object": {
+    "sha": "abc123def456abc123def456abc123def456abc1",
+    "type": "commit"
+  }
+}
