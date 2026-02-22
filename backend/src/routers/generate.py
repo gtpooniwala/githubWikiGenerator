@@ -37,6 +37,11 @@ async def _run_pipeline(repo_url: str) -> AsyncIterator[str]:
     repo_id = _parse_repo_id(repo_url)
     owner, repo = repo_id.split("/", 1)
 
+    # Emit immediately so the browser's EventSource knows the connection is alive
+    # and the user sees feedback before the slow network I/O begins.
+    yield _sse_message("connecting", {"message": f"Connecting to repository {owner}/{repo}…"})
+    await asyncio.sleep(0)  # flush to client before blocking
+
     # Stage 1: Load repo snapshot (network I/O — offload to thread)
     snapshot = await asyncio.to_thread(load_snapshot, owner, repo)
     yield _sse_message("repo_loaded", {
@@ -44,6 +49,7 @@ async def _run_pipeline(repo_url: str) -> AsyncIterator[str]:
         "file_count": len(snapshot.files),
         "commit_sha": snapshot.commit_sha,
     })
+    await asyncio.sleep(0)
 
     # Stage 2: Chunk all files
     all_chunks = []
@@ -53,6 +59,7 @@ async def _run_pipeline(repo_url: str) -> AsyncIterator[str]:
         "message": "Files chunked",
         "chunk_count": len(all_chunks),
     })
+    await asyncio.sleep(0)
 
     # Stage 3: Extract signals (README headings, routes, entrypoints)
     readme_file = next((f for f in snapshot.files if f.path.lower() in ("readme.md", "readme")), None)
@@ -68,10 +75,13 @@ async def _run_pipeline(repo_url: str) -> AsyncIterator[str]:
         "routes": len(signals.routes),
         "entrypoints": len(signals.entrypoints),
     })
+    await asyncio.sleep(0)
 
     # Stages 4–5: LLM pipeline not yet implemented (Steps 11–19)
     yield _sse_message("features_proposed", {"message": "Features proposed (pipeline pending)"})
+    await asyncio.sleep(0)
     yield _sse_message("pages_written", {"message": "Pages written (pipeline pending)"})
+    await asyncio.sleep(0)
     yield _sse_message("done", {"message": "Complete"})
 
 

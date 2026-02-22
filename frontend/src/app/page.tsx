@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { checkHealth as apiCheckHealth } from '@/lib/api';
 import { RepoForm } from '@/components/RepoForm';
 
-const SSE_EVENTS = ['repo_loaded', 'chunked', 'signals_extracted', 'features_proposed', 'pages_written', 'done'] as const;
+const SSE_EVENTS = ['connecting', 'repo_loaded', 'chunked', 'signals_extracted', 'features_proposed', 'pages_written', 'done'] as const;
 
 interface StatusMessage {
   label: string;

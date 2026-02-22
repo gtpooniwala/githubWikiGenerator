@@ -73,14 +73,14 @@ def test_stream_returns_event_stream_content_type(mock_pipeline):
 def test_stream_emits_all_expected_events(mock_pipeline):
     r = client.get("/api/generate/stream", params={"repo_url": REPO_URL}, headers={"x-api-key": VALID_KEY})
     text = r.text
-    for event_name in ["repo_loaded", "chunked", "signals_extracted", "features_proposed", "pages_written", "done"]:
+    for event_name in ["connecting", "repo_loaded", "chunked", "signals_extracted", "features_proposed", "pages_written", "done"]:
         assert f"event: {event_name}" in text, f"Missing event: {event_name}"
 
 
 def test_stream_event_blocks_have_valid_json_data(mock_pipeline):
     r = client.get("/api/generate/stream", params={"repo_url": REPO_URL}, headers={"x-api-key": VALID_KEY})
     blocks = [b for b in r.text.strip().split("\n\n") if b.strip()]
-    assert len(blocks) == 6
+    assert len(blocks) == 7
     for block in blocks:
         lines = [l for l in block.splitlines() if l.strip()]
         assert any(l.startswith("event:") for l in lines)
