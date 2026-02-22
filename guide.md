@@ -99,19 +99,20 @@ Step X: <short name>
 | 11 | File-level import graph | `544d4c1` | `services/import_graph.py` — Python + JS/TS; 22 tests |
 | 12 | Search index over chunks | `0627c74` | `services/search_index.py` — BM25 + substring fallback; 24 tests |
 | 13 | LLM client | `f9e7917` | `services/llm.py`, `models/llm_schemas.py` — chat_text, chat_json, fence-strip, retries; 27 tests |
+| 14 | Feature proposals | `4645e1b` | `services/propose_features.py` — LLM-driven, banned-word filter, slug normalisation; 31 tests |
 
-**157 backend tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`, `test_generate_stream`, `test_import_graph`, `test_search_index`, `test_llm`.
+**188 backend tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`, `test_generate_stream`, `test_import_graph`, `test_search_index`, `test_llm`, `test_propose_features`.
 **23 frontend tests passing**: `route-generate.test.ts` (7) + `route-stream.test.ts` (5) + `ui-basic.test.tsx` (11).
 
 ### Next Step
 
-**STEP 14: Backend – Feature Proposals (LLM)**
+**STEP 15: Backend – Evidence Gathering (Deterministic + Bounded)**
 
 ### Deployment
 
 * **Backend Cloud Run URL:** `https://wiki-generator-backend-ud74aktrjq-uc.a.run.app`
 * **GCP project:** `pushstart-481717`, region `us-central1`
-* **Latest deployed commit:** `1c6b091` (guide update after Step 13 — redeploy pending for steps 11-13)
+* **Latest deployed commit:** `4645e1b` (Step 14; CI redeploys on push to `backend/**`)
 * Smoke checks: `GET /health` → `{"status":"healthy"}` ✅
 
 ### Critical Technical Context (for new sessions)
@@ -151,7 +152,8 @@ backend/src/
     ├── signals.py        # extract_readme_signals, extract_route_signals, extract_entrypoints
     ├── import_graph.py   # build_import_graph(files) -> dict[str, list[str]] — Python + JS/TS
     ├── search_index.py   # SearchIndex.from_chunks(chunks); BM25 + substring fallback
-    └── llm.py            # chat_text(), chat_json(schema) — OpenAI wrapper with retries
+    ├── llm.py            # chat_text(), chat_json(schema) — OpenAI wrapper with retries
+    └── propose_features.py  # propose_features(snapshot, signals) -> FeatureProposalList
 ```
 `PYTHONPATH=/app/src` in Dockerfile; `pythonpath = src` in `pytest.ini`.
 
