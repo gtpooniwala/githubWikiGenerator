@@ -18,8 +18,10 @@ from services.evidence import EvidencePack
 from services.llm import _set_client
 from services.write_pages import (
     _CHUNK_DISPLAY_CHARS,
+    _OVERVIEW_FILE_MAX_CHARS,
     write_all_feature_pages,
     write_feature_page,
+    write_overview_page,
 )
 
 # ---------------------------------------------------------------------------
@@ -287,3 +289,174 @@ def test_write_all_feature_pages_empty_features_returns_empty():
     _set_client(_mock_client("Content."))
     result = write_all_feature_pages([], {}, OWNER, REPO, SHA)
     assert result == []
+
+
+# ---------------------------------------------------------------------------
+# write_overview_page helpers
+# ---------------------------------------------------------------------------
+
+import pytest as _pytest  # noqa: E402 — local alias to avoid re-import confusion
+
+from models.repo_snapshot import FileEntry, RepoSnapshot
+
+
+def _snapshot(files: list[FileEntry] | None = None) -> RepoSnapshot:
+    return RepoSnapshot(
+        owner=OWNER,
+        repo=REPO,
+        default_branch="main",
+        commit_sha=SHA,
+        files=files or [],
+    )
+
+
+def _file(path: str, content: str) -> FileEntry:
+    return FileEntry(path=path, size=len(content), content=content)
+
+
+# ---------------------------------------------------------------------------
+# write_overview_page — basic contract
+# ---------------------------------------------------------------------------
+
+
+def test_overview_returns_string():
+    _set_client(_mock_client("## What\nThis project does X."))
+    snap = _snapshot()
+    result = write_overview_page(snap, OWNER, REPO, SHA)
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+def test_overview_citations_resolved():
+    """Citations in the LLM output are converted to GitHub permalink links."""
+    _set_client(_mock_client("Entry point at [main.py:1-5]."))
+    snap = _snapshot([_file("main.py", "# main\n")])
+    result = write_overview_page(snap, OWNER, REPO, SHA)
+    assert f"https://github.com/{OWNER}/{REPO}/blob/{SHA}/main.py#L1-L5" in result
+
+
+def test_overview_sha_in_citation_url():
+    _set_client(_mock_client("Config in [config.py:10-20]."))
+    snap = _snapshot([_file("config.py", "# cfg\n")])
+    result = write_overview_page(snap, OWNER, REPO, SHA)
+    assert SHA in result
+
+
+def test_overview_no_citations_returned_as_is():
+    raw = "An overview with no citations."
+    _set_client(_mock_client(raw))
+    snap = _snapshot()
+    result = write_overview_page(snap, OWNER, REPO, SHA)
+    assert result == raw
+
+
+def test_overview_empty_snapshot_no_crash():
+    _set_client(_mock_client("Overview text."))
+    snap = _snapshot([])
+    result = write_overview_page(snap, OWNER, REPO, SHA)
+    assert isinstance(result, str)
+
+
+# ---------------------------------------------------------------------------
+# write_overview_page — evidence selection
+# ---------------------------------------------------------------------------
+
+
+def test_overview_prompt_contains_readme_content():
+    mock = _mock_client("Overview.")
+    _set_client(mock)
+    snap = _snapshot([_file("README.md", "# MyApp\nDoes amazing things.")])
+    write_overview_page(snap, OWNER, REPO, SHA)
+    call_args = mock.chat.completions.create.call_args
+    messages = call_args.kwargs["messages"]
+    user_content = next(m["content"] for m in messages if m["role"] == "user")
+    assert "Does amazing things." in user_content
+
+
+def test_overview_prompt_contains_package_json():
+    mock = _mock_client("Overview.")
+    _set_client(mock)
+    snap = _snapshot([_file("package.json", '{"name":"myapp","scripts":{"start":"node index.js"}}')])
+    write_overview_page(snap, OWNER, REPO, SHA)
+    call_args = mock.chat.completions.create.call_args
+    messages = call_args.kwargs["messages"]
+    user_content = next(m["content"] for m in messages if m["role"] == "user")
+    assert "package.json" in user_content
+    assert "myapp" in user_content
+
+
+def test_overview_prompt_contains_pyproject_toml():
+    mock = _mock_client("Overview.")
+    _set_client(mock)
+    snap = _snapshot([_file("pyproject.toml", '[project]\nname = "myapp"\n')])
+    write_overview_page(snap, OWNER, REPO, SHA)
+    call_args = mock.chat.completions.create.call_args
+    messages = call_args.kwargs["messages"]
+    user_content = next(m["content"] for m in messages if m["role"] == "user")
+    assert "pyproject.toml" in user_content
+
+
+def test_overview_prompt_contains_entrypoint():
+    mock = _mock_client("Overview.")
+    _set_client(mock)
+    snap = _snapshot([_file("main.py", "if __name__ == '__main__': run()")])
+    write_overview_page(snap, OWNER, REPO, SHA)
+    call_args = mock.chat.completions.create.call_args
+    messages = call_args.kwargs["messages"]
+    user_content = next(m["content"] for m in messages if m["role"] == "user")
+    assert "main.py" in user_content
+    assert "run()" in user_content
+
+
+def test_overview_non_overview_files_excluded():
+    """Implementation files not in the evidence set should not appear in prompt."""
+    mock = _mock_client("Overview.")
+    _set_client(mock)
+    snap = _snapshot([
+        _file("README.md", "Docs."),
+        _file("src/utils/helpers.py", "def helper(): pass"),
+        _file("src/db/models.py", "class User: pass"),
+    ])
+    write_overview_page(snap, OWNER, REPO, SHA)
+    call_args = mock.chat.completions.create.call_args
+    messages = call_args.kwargs["messages"]
+    user_content = next(m["content"] for m in messages if m["role"] == "user")
+    assert "helpers.py" not in user_content
+    assert "models.py" not in user_content
+
+
+def test_overview_long_file_truncated_in_prompt():
+    """Files exceeding _OVERVIEW_FILE_MAX_CHARS are truncated."""
+    long_content = "x" * (_OVERVIEW_FILE_MAX_CHARS + 500)
+    mock = _mock_client("Overview.")
+    _set_client(mock)
+    snap = _snapshot([_file("README.md", long_content)])
+    write_overview_page(snap, OWNER, REPO, SHA)
+    call_args = mock.chat.completions.create.call_args
+    messages = call_args.kwargs["messages"]
+    user_content = next(m["content"] for m in messages if m["role"] == "user")
+    assert "truncated" in user_content
+    assert long_content not in user_content
+
+
+def test_overview_prompt_contains_owner_repo():
+    mock = _mock_client("Overview.")
+    _set_client(mock)
+    snap = _snapshot()
+    write_overview_page(snap, OWNER, REPO, SHA)
+    call_args = mock.chat.completions.create.call_args
+    messages = call_args.kwargs["messages"]
+    user_content = next(m["content"] for m in messages if m["role"] == "user")
+    assert f"{OWNER}/{REPO}" in user_content
+
+
+def test_overview_nested_entrypoint_included():
+    """Entrypoint files in subdirectories are still included."""
+    mock = _mock_client("Overview.")
+    _set_client(mock)
+    snap = _snapshot([_file("src/app.py", "from fastapi import FastAPI\napp = FastAPI()")])
+    write_overview_page(snap, OWNER, REPO, SHA)
+    call_args = mock.chat.completions.create.call_args
+    messages = call_args.kwargs["messages"]
+    user_content = next(m["content"] for m in messages if m["role"] == "user")
+    assert "src/app.py" in user_content

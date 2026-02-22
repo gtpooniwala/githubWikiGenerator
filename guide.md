@@ -1152,6 +1152,17 @@ Frontend Cloud Run:
 
 ---
 
+## Step 23: Miscellaneous Polish 
+
+* Refactor tests
+
+  * delete redundant/unnecessary tests
+  * add any missing edge case tests
+  * test code cleanup
+
+* Update README with usage instructions and challenge description+answers
+
+
 # Appendices
 
 ## Appendix A: LLM Prompts (Templates)

@@ -1,18 +1,23 @@
-"""Generate per-feature wiki pages from evidence packs using the LLM.
+"""Generate per-feature wiki pages and the repo-level overview page using the LLM.
 
-Each page is a markdown document with:
+Each feature page is a markdown document with:
 - A brief user-facing description of what the feature does
 - How the feature works (drawing from evidence chunks)
 - Key interfaces, entry points, or public API surface
 - Inline citations in ``[path:start-end]`` format
 
-After the LLM generates the raw markdown the internal citations are
-resolved to stable GitHub permalink links via :mod:`services.citations`.
+The overview page covers what the repo does, its high-level architecture,
+and how to run it, drawing from the README, manifest files, and main entry
+points.
+
+After the LLM generates raw markdown the internal citations are resolved
+to stable GitHub permalink links via :mod:`services.citations`.
 """
 
 from __future__ import annotations
 
 from models.llm_schemas import FeatureProposal
+from models.repo_snapshot import FileEntry, RepoSnapshot
 from models.schemas import WikiFeature
 from services.citations import resolve_citations
 from services.evidence import EvidencePack
@@ -137,3 +142,109 @@ def write_all_feature_pages(
             )
         )
     return pages
+
+
+# ---------------------------------------------------------------------------
+# Overview page
+# ---------------------------------------------------------------------------
+
+# Filenames (case-insensitive, final path component) that are included in
+# the overview evidence.
+_README_NAMES: frozenset[str] = frozenset(
+    {"readme.md", "readme.rst", "readme.txt", "readme"}
+)
+_MANIFEST_NAMES: frozenset[str] = frozenset(
+    {"package.json", "pyproject.toml", "setup.py", "cargo.toml", "go.mod"}
+)
+_ENTRYPOINT_NAMES: frozenset[str] = frozenset(
+    {
+        "main.py",
+        "__main__.py",
+        "app.py",
+        "server.py",
+        "index.ts",
+        "index.js",
+        "index.tsx",
+        "main.ts",
+        "app.ts",
+        "wsgi.py",
+        "asgi.py",
+    }
+)
+
+# Per-file character display cap inside the overview prompt — keeps the
+# context focused and bounded.
+_OVERVIEW_FILE_MAX_CHARS: int = 3_000
+
+_OVERVIEW_SYSTEM = """\
+You are a senior technical writer creating the overview page for a software \
+repository wiki.
+
+Write a concise, developer-facing overview in plain markdown covering:
+1. **What this project does** — a 2-3 sentence summary for engineers.
+2. **High-level architecture** — key components and how they relate.
+3. **How to run / get started** — installation and quickstart steps if \
+evident from the files.
+
+Guidelines:
+- Target audience: engineers, not end users.
+- Use ## for section headings.  Do NOT add a title heading.
+- Cite every nontrivial claim using the chunk citation format: \
+[path/to/file.ext:start_line-end_line].  Only cite files shown below.
+- Do NOT invent file paths or line numbers.
+- Keep to 200-500 words of prose.
+"""
+
+
+def _is_overview_file(path: str) -> bool:
+    """Return ``True`` if *path* should be included in the overview evidence."""
+    fname = path.rsplit("/", 1)[-1].lower()
+    return fname in _README_NAMES or fname in _MANIFEST_NAMES or fname in _ENTRYPOINT_NAMES
+
+
+def _gather_overview_files(snapshot: RepoSnapshot) -> list[FileEntry]:
+    """Select README, manifest and entrypoint files from *snapshot*."""
+    return [f for f in snapshot.files if _is_overview_file(f.path)]
+
+
+def write_overview_page(
+    snapshot: RepoSnapshot,
+    owner: str,
+    repo: str,
+    commit_sha: str,
+) -> str:
+    """Generate a repo-level overview using the LLM.
+
+    The evidence set is intentionally small — README, package manifests, and
+    main entry-point files — so the overview stays high-level rather than
+    drowning in implementation details.
+
+    Args:
+        snapshot:   Full :class:`~models.repo_snapshot.RepoSnapshot` for the
+                    repository.
+        owner:      GitHub repository owner.
+        repo:       GitHub repository name.
+        commit_sha: Commit SHA used for stable citation permalink URLs.
+
+    Returns:
+        Resolved markdown string for the overview page.
+    """
+    files = _gather_overview_files(snapshot)
+
+    parts: list[str] = []
+    for f in files:
+        text = f.content
+        if len(text) > _OVERVIEW_FILE_MAX_CHARS:
+            text = text[:_OVERVIEW_FILE_MAX_CHARS] + "\n... [truncated]"
+        parts.append(f"=== {f.path} ===\n{text}")
+
+    evidence_block = "\n\n".join(parts) if parts else "(no overview files found)"
+
+    user_prompt = (
+        f"Repository: {owner}/{repo}\n\n"
+        "Files (cite using [path:start_line-end_line]):\n\n"
+        f"{evidence_block}"
+    )
+
+    raw_md = llm.chat_text(_OVERVIEW_SYSTEM, user_prompt)
+    return resolve_citations(raw_md, owner=owner, repo=repo, commit_sha=commit_sha)
