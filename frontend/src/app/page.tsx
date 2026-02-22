@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { checkHealth as apiCheckHealth } from '@/lib/api';
+import { checkHealth as apiCheckHealth, generateWiki, GenerateResponse } from '@/lib/api';
 import { RepoForm } from '@/components/RepoForm';
+import { WikiViewer } from '@/components/WikiViewer';
 
 const SSE_EVENTS = ['connecting', 'repo_loaded', 'chunked', 'signals_extracted', 'features_proposed', 'pages_written', 'done'] as const;
 
@@ -32,6 +33,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [statusMessages, setStatusMessages] = useState<StatusMessage[]>([]);
   const [healthStatus, setHealthStatus] = useState<HealthStatus>('idle');
+  const [wikiData, setWikiData] = useState<GenerateResponse | null>(null);
 
   const checkHealth = useCallback(async () => {
     setHealthStatus('checking');
@@ -53,6 +55,7 @@ export default function Home() {
     setDone(false);
     setError(null);
     setStatusMessages([]);
+    setWikiData(null);
 
     const es = new EventSource(`/api/generate/stream?repo_url=${encodeURIComponent(repoUrl)}`);
 
@@ -66,8 +69,17 @@ export default function Home() {
         ]);
         if (eventName === 'done') {
           es.close();
-          setLoading(false);
-          setDone(true);
+          // SSE pipeline complete — now fetch the full wiki result
+          generateWiki(repoUrl)
+            .then((data) => {
+              setWikiData(data);
+              setLoading(false);
+              setDone(true);
+            })
+            .catch((err: Error) => {
+              setError(err.message);
+              setLoading(false);
+            });
         }
       });
     });
@@ -207,14 +219,10 @@ export default function Home() {
         )}
       </section>
 
-      {/* Pipeline complete — wiki viewer will be wired here in a later step */}
-      {done && !loading && (
-        <section className="max-w-2xl mx-auto px-4 sm:px-6 pb-16">
-          <div className="rounded-xl border border-green-200 bg-green-50 p-6 text-center">
-            <p className="text-2xl mb-2">✅</p>
-            <p className="font-semibold text-green-800">Pipeline complete</p>
-            <p className="text-sm text-green-600 mt-1">Wiki generation is being implemented — the output will appear here once the LLM pipeline is wired up.</p>
-          </div>
+      {/* Wiki result */}
+      {wikiData && !loading && (
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-16">
+          <WikiViewer data={wikiData} />
         </section>
       )}
     </div>

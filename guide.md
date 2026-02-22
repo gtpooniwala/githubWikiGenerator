@@ -106,13 +106,15 @@ Step X: <short name>
 | 16 | Page writing + citations | `pending` | `services/citations.py` + `services/write_pages.py` — [path:start-end] → GitHub permalink links; per-feature LLM page writer; 38 tests |
 | 17 | Overview page | `5278916` | `write_overview_page()` in `services/write_pages.py` — README+manifests+entrypoints evidence; 13 new tests; 263 total |
 | 18 | Pipeline orchestrator | `8259cc5` | `services/pipeline.py` — `run_pipeline()` wires all stages; `test_pipeline_smoke.py` 21 tests; 284 total |
+| 19 | Wire `/api/generate` endpoint | `5e613e4` | `routers/generate.py` calls `run_pipeline()`; `test_schemas.py` + `test_auth.py` mock pipeline; 284 backend |
+| 20 | Frontend navigable wiki | `pending` | `page.tsx` renders `WikiViewer` after SSE+POST; `/wiki/[owner]/[repo]` standalone page; 28 frontend tests |
 
-**284 backend tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`, `test_generate_stream`, `test_import_graph`, `test_search_index`, `test_llm`, `test_propose_features`, `test_evidence`, `test_citations`, `test_write_pages`, `test_pipeline_smoke`.
-**25 frontend tests passing**: `route-generate.test.ts` (7) + `route-stream.test.ts` (5) + `ui-basic.test.tsx` (13).
+**284 backend tests passing** across all test files.
+**28 frontend tests passing**: `route-generate.test.ts` (7) + `route-stream.test.ts` (5) + `ui-basic.test.tsx` (16).
 
 ### Next Step
 
-**STEP 19: Backend – `/api/generate` Endpoint**
+**STEP 21: CI – Tests Gate Deploy**
 
 ### Deployment
 

@@ -3,12 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-// Mock the api module — page.tsx only uses checkHealth now
+// Mock the api module
 vi.mock('@/lib/api', () => ({
   checkHealth: vi.fn().mockResolvedValue({ status: 'healthy' }),
+  // Default: never-resolving promise so tests control when wiki data arrives
+  generateWiki: vi.fn(() => new Promise(() => {})),
 }));
 
-import { checkHealth } from '@/lib/api';
+import { checkHealth, generateWiki } from '@/lib/api';
 import Home from '../src/app/page';
 import { RepoForm } from '../src/components/RepoForm';
 
@@ -44,6 +46,21 @@ class MockEventSource {
   }
 }
 
+// Shared mock wiki response used in several tests
+const MOCK_WIKI = {
+  repo_id: 'owner/repo',
+  commit_sha: 'abc1234def567',
+  overview_md: '## Overview\n\nThis is the overview.',
+  features: [
+    {
+      id: 'feature-one',
+      title: 'Feature One',
+      description: 'The first feature.',
+      content_md: '## Feature One\n\nContent here.',
+    },
+  ],
+};
+
 // ---------------------------------------------------------------------------
 // Shared setup
 // ---------------------------------------------------------------------------
@@ -54,6 +71,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Re-apply after clearAllMocks
   vi.mocked(checkHealth).mockResolvedValue({ status: 'healthy' });
+  vi.mocked(generateWiki).mockImplementation(() => new Promise(() => {})); // pending by default
 });
 
 describe('RepoForm', () => {
@@ -137,9 +155,27 @@ describe('Home page', () => {
     expect(screen.getByRole('button', { name: /generating/i })).toBeDisabled();
   });
 
-  it('shows pipeline complete banner after SSE done event', async () => {
+  it('shows loading spinner while generateWiki is pending after SSE done', async () => {
+    // generateWiki is pending by default
     const user = userEvent.setup();
+    render(<Home />);
 
+    const input = screen.getByRole('textbox', { name: /github repository url/i });
+    await user.type(input, 'https://github.com/owner/repo');
+    await user.click(screen.getByRole('button', { name: /generate wiki/i }));
+
+    const es = MockEventSource.instances[0];
+    act(() => es.emit('done', { message: 'Complete' }));
+
+    // Loading spinner should still be present while generateWiki is pending
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: /generating wiki/i })).toBeInTheDocument();
+    });
+  });
+
+  it('shows wiki viewer when generateWiki resolves after SSE done', async () => {
+    vi.mocked(generateWiki).mockResolvedValueOnce(MOCK_WIKI);
+    const user = userEvent.setup();
     render(<Home />);
 
     const input = screen.getByRole('textbox', { name: /github repository url/i });
@@ -150,11 +186,51 @@ describe('Home page', () => {
     act(() => es.emit('done', { message: 'Complete' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/pipeline complete/i)).toBeInTheDocument();
+      // WikiViewer renders the repo link in the sidebar
+      expect(screen.getByRole('link', { name: /owner\/repo/i })).toBeInTheDocument();
     });
 
     // Loading spinner should be gone
     expect(screen.queryByRole('status', { name: /generating wiki/i })).not.toBeInTheDocument();
+  });
+
+  it('shows wiki sidebar with overview and feature list', async () => {
+    vi.mocked(generateWiki).mockResolvedValueOnce(MOCK_WIKI);
+    const user = userEvent.setup();
+    render(<Home />);
+
+    await user.type(
+      screen.getByRole('textbox', { name: /github repository url/i }),
+      'https://github.com/owner/repo',
+    );
+    await user.click(screen.getByRole('button', { name: /generate wiki/i }));
+
+    const es = MockEventSource.instances[0];
+    act(() => es.emit('done', { message: 'Complete' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /overview/i })).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /feature one/i })).toBeInTheDocument();
+  });
+
+  it('shows error message when generateWiki fails after SSE done', async () => {
+    vi.mocked(generateWiki).mockRejectedValueOnce(new Error('OpenAI rate limit'));
+    const user = userEvent.setup();
+    render(<Home />);
+
+    await user.type(
+      screen.getByRole('textbox', { name: /github repository url/i }),
+      'https://github.com/owner/repo',
+    );
+    await user.click(screen.getByRole('button', { name: /generate wiki/i }));
+
+    const es = MockEventSource.instances[0];
+    act(() => es.emit('done', { message: 'Complete' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('OpenAI rate limit');
+    });
   });
 
   it('shows error message when SSE error event fires', async () => {
