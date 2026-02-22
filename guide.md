@@ -98,13 +98,14 @@ Step X: <short name>
 | 10 | Real-time SSE status updates | `91d51d0` | `generate.py` real pipeline (repo_loaded→chunked→signals_extracted→done); `stream/route.ts` proxy; `page.tsx` EventSource consumer; 10 backend + 6 frontend new tests |
 | 11 | File-level import graph | `544d4c1` | `services/import_graph.py` — Python + JS/TS; 22 tests |
 | 12 | Search index over chunks | `0627c74` | `services/search_index.py` — BM25 + substring fallback; 24 tests |
+| 13 | LLM client | `f9e7917` | `services/llm.py`, `models/llm_schemas.py` — chat_text, chat_json, fence-strip, retries; 27 tests |
 
-**130 backend tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`, `test_generate_stream`, `test_import_graph`, `test_search_index`.
+**157 backend tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`, `test_generate_stream`, `test_import_graph`, `test_search_index`, `test_llm`.
 **23 frontend tests passing**: `route-generate.test.ts` (7) + `route-stream.test.ts` (5) + `ui-basic.test.tsx` (11).
 
 ### Next Step
 
-**STEP 13: Backend – LLM Client (Robust JSON)**
+**STEP 14: Backend – Feature Proposals (LLM)**
 
 ### Deployment
 
