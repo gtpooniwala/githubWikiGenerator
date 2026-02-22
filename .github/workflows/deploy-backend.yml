@@ -14,7 +14,32 @@ env:
   REGION: us-central1
 
 jobs:
+  test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run backend tests
+        run: |
+          cd backend
+          .venv/bin/python -m pytest -q --tb=short
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     environment: GCP Cloud Run
     permissions:

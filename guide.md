@@ -108,13 +108,14 @@ Step X: <short name>
 | 18 | Pipeline orchestrator | `8259cc5` | `services/pipeline.py` — `run_pipeline()` wires all stages; `test_pipeline_smoke.py` 21 tests; 284 total |
 | 19 | Wire `/api/generate` endpoint | `5e613e4` | `routers/generate.py` calls `run_pipeline()`; `test_schemas.py` + `test_auth.py` mock pipeline; 284 backend |
 | 20 | Frontend navigable wiki | `ba327e7` | `page.tsx` renders `WikiViewer` after SSE+POST; `/wiki/[owner]/[repo]` standalone page; 28 frontend tests |
+| 21 | CI tests gate deploy | `pending` | `test.yml` (backend pytest + frontend vitest+build); deploy workflows gate on `needs: test` |
 
 **284 backend tests passing** across all test files.
 **28 frontend tests passing**: `route-generate.test.ts` (7) + `route-stream.test.ts` (5) + `ui-basic.test.tsx` (16).
 
 ### Next Step
 
-**STEP 21: CI – Tests Gate Deploy**
+**STEP 22: Deploy + Smoke Checks**
 
 ### Deployment
 
@@ -210,8 +211,8 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 
 ### Items Pending ❗
 
-* **Step 21** – CI test gating
 * **Step 22** – Final deploy + smoke checks
+* **Step 23** – Miscellaneous polish
 
 ---
 
