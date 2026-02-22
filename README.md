@@ -155,7 +155,7 @@ GitHub URL
 | 5 | Build search index | `search_index.py` (BM25) | — |
 | 6 | Propose features | `propose_features.py` | ✓ `gpt-5-mini` |
 | 7 | Gather evidence | `evidence.py` (seed → graph expand → BM25 → dedup) | — |
-| 8 | Write feature pages | `write_pages.py` → `citations.py` (chunk ID → permalink) | ✓ `gpt-5-mini` × N |
+| 8 | Write feature pages | `write_pages.py` → `citations.py` (chunk ID → permalink) | ✓ `gpt-5-mini` |
 | 9 | Write overview | `write_pages.py` | ✓ `gpt-5-mini` |
 
 ### SSE streaming
@@ -207,10 +207,11 @@ Detailed rationale and alternatives for pipeline quality improvements are docume
 
 ### What I’d improve with more time
 
-- **Chunking and citation quality** — chunking is regex-based with semantic hints; graph expansion is file-level and outgoing-only, which can miss caller context and produce noisy evidence packs. The LLM can also hallucinate seed paths and line ranges that produce valid-looking 404 citation links. AST/tree-sitter chunking, reverse-edge traversal, and strict citation validation would all materially improve output quality. Full audit and ranked improvement options are in [pipeline-improvements.md](pipeline-improvements.md).
+- **Pipeline logic improvements** - [pipeline-improvements.md](pipeline-improvements.md).
 - **Parallel feature page writing** — feature pages are written sequentially; all evidence packs are independent so this is trivially parallelisable with a thread pool, cutting LLM wall-clock time from ~N×4s to ~4s regardless of feature count.
 - **Caching and persistence** — no caching keyed by `(repo, commit_sha)` exists today; repeat requests re-run the full pipeline. A simple store (even SQLite) would make re-visits instant and enable a “Regenerate” flow.
 - **Testing coverage and evaluation harness** — all LLM calls are mocked in tests; there is no integration test against a live repo or benchmark set to catch prompt regressions or measure citation quality. See [pipeline-improvements.md](pipeline-improvements.md) for a proposed evaluation approach.
+- **LLM evaluation and prompt iteration** — while the current prompts produce decent output, there is ample room for improvement in clarity, formatting, and citation quality. A more rigorous evaluation setup would enable systematic prompt tuning.
 
 ### Bonus features implemented
 
@@ -221,23 +222,3 @@ Detailed rationale and alternatives for pipeline quality improvements are docume
 - **No rate limiting or request queuing** on `/api/generate` — a single request triggers ~10 LLM calls and multiple GitHub API fetches; without throttling, concurrent requests compete for quota and the endpoint is DoS-able.
 - **Single Cloud Run instance** — the backend is stateless but would need a `min-instances` setting and autoscaling config for production traffic.
 - **Limited repo coverage** — tested against a handful of small-to-medium repos. Larger or unusual codebases may hit edge cases in the chunker, import graph, or evidence gatherer.
-
-## Deployment
-
-```bash
-# Backend
-gcloud run deploy wiki-generator-backend \
-  --project pushstart-481717 \
-  --source ./backend \
-  --region us-central1 \
-  --allow-unauthenticated
-
-# Check CI
-GH_PAGER=cat gh run list --repo gtpooniwala/githubWikiGenerator
-```
-
-## GCP Config
-
-- Project: `pushstart-481717`
-- Region: `us-central1`
-- WIF Pool: `github-pool` / Provider: `github-provider`

@@ -199,6 +199,7 @@ Result:
 - Expansion follows only outgoing imports (`A -> deps`)
 - Caller context (`who imports/calls A`) is not included
 - File-level traversal can over-pull unrelated code
+- BFS expansion without any relevance signal can pull in noisy neighbors
 
 Result:
 
@@ -223,12 +224,6 @@ Result:
 
 - Plausible but invalid citations can appear trustworthy
 
-## E) A few documentation statements need correction/clarification
-
-1. **“Cache embeddings” wording appears in README**, but the current pipeline does not create embeddings.
-2. **UI location text in README may drift** as frontend layout evolves (e.g., Q&A location changed recently).
-3. Some long bullets in README mix operational and retrieval concerns, reducing clarity.
-
 ---
 
 ## Recommended improvements that are worth mentioning
@@ -237,50 +232,43 @@ These are ranked by impact-to-complexity.
 
 ## Tier 1 — Immediate, low-risk, high ROI
 
-1. **Reverse-edge graph expansion**
-   - Add `imported_by` adjacency and include caller-side neighbors with caps
-   - Why worth it: major relevance gains with small implementation change
-
-2. **Strict seed-path validation**
+1. **Strict seed-path validation**
    - Drop invalid seed paths before evidence collection
    - Why worth it: prevents thin/empty evidence caused by hallucinated paths
 
-3. **Strict citation validation pass**
+2. **Strict citation validation pass**
    - Verify citation path + line span against known chunk index before linkifying
    - Why worth it: materially improves trust with limited complexity
 
-4. **Feature proposal context enrichment with symbols**
+3. **Feature proposal context enrichment with symbols**
    - Add top-level symbol names per file to proposal prompt
    - Why worth it: better seed quality for little token cost
 
 ## Tier 2 — Medium effort, major quality gain
 
-5. **Python AST-based chunking**
+1. **AST-based(or Tree-sitter-based) chunking**
    - Use AST node spans for function/class-level chunking
    - Keep current window chunking as fallback on parse failure
+   - Also include reverse-edge graph expansion
 
-6. **Tree-sitter chunking for JS/TS (+ select languages)**
-   - Use parser nodes for semantic chunk boundaries
-   - Keep regex/window fallback for unsupported edge cases
-
-7. **Two-phase evidence budgeting**
+2. **Improve graph traversal logic**
+   - Add relevance heuristics to prioritize which neighbors to include (e.g., prefer files with similar embeddings, more seeds or with certain signal types)
    - Reserve chunk budget slices by source (seed/graph/search) rather than first-come truncation
    - Why worth it: avoids one source dominating evidence pack quality
 
 ## Tier 3 — Advanced options (only when justified)
 
-8. **Symbol-aware graph (incremental call graph)**
+1. **Symbol-aware graph (incremental call graph)**
    - Move from file-level to symbol-level traversal where possible
    - Higher precision, higher maintenance
 
-9. **Hybrid retrieval (BM25 + embedding rerank)**
+2. **Hybrid retrieval (BM25 + embedding rerank)**
    - Keep BM25 retrieval; rerank top candidates semantically
    - Better semantic recall without immediate full vector-stack commitment
 
-10. **Graph-RAG architecture**
-
-  - Combine graph traversal with embedding retrieval over node/chunk representations
-  - Powerful but operationally heavy; only justify for large/polyglot repos and stricter quality targets
+3. **Graph-RAG architecture**
+   - Combine graph traversal with embedding retrieval over node/chunk representations
+   - Powerful but operationally heavy; only justify for large/polyglot repos and stricter quality targets
 
 ---
 
@@ -314,29 +302,6 @@ Use when:
 
 - Corpus scale and heterogeneity make lexical-only retrieval insufficient
 - You can absorb additional infra, latency, and maintenance cost
-
----
-
-## Suggested phased roadmap
-
-## Phase 1 (short)
-
-- Reverse-edge expansion
-- Seed validation
-- Citation validation
-- Symbol names in proposal context
-
-## Phase 2 (medium)
-
-- Python AST chunking + fallback
-- Evidence budget allocation by source
-- **Evaluation harness and benchmark set** — currently there are no integration tests against live repos and no benchmark set to track quality regressions. A small fixed set of diverse repos with manually verified expected outputs (feature count, citation validity, overview accuracy) would make it possible to measure whether any improvement actually helps. Without this, iterating on chunking or evidence logic is essentially blind. This item also covers the general lack of pipeline coverage testing noted elsewhere.
-
-## Phase 3 (long)
-
-- Tree-sitter rollout for JS/TS and selected languages
-- Optional hybrid rerank (BM25 + embeddings)
-- Reassess need for symbol graph / graph-RAG
 
 ---
 

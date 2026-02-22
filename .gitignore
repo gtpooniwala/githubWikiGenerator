@@ -23,3 +23,6 @@ __pycache__/
 
 # GCP / secrets
 gcp-key.json
+
+# OS files
+.DS_Store

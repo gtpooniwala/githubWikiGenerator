@@ -387,7 +387,7 @@ export default function Home() {
           <span className="text-2xl" aria-hidden="true">📚</span>
           <div>
             <h1 className="text-lg font-bold text-slate-900 leading-none">Wiki Generator</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Instant docs for any public GitHub repo</p>
+            <p className="text-xs text-slate-500 mt-0.5">Instant feature docs for any public GitHub repo</p>
           </div>
 
           {/* Health badge + button */}
