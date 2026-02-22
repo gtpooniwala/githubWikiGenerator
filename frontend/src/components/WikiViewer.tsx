@@ -9,14 +9,15 @@ interface WikiViewerProps {
 }
 
 export function WikiViewer({ data }: WikiViewerProps) {
+  const features = data.features ?? [];
   const [activeFeatureId, setActiveFeatureId] = useState<string>(
-    data.features.length > 0 ? data.features[0].id : '__overview__'
+    features.length > 0 ? features[0].id : '__overview__'
   );
 
-  const activeFeature: WikiFeature | undefined = data.features.find(
+  const activeFeature: WikiFeature | undefined = features.find(
     (f) => f.id === activeFeatureId
   );
-  const showOverview = activeFeatureId === '__overview__';
+  const showOverview = activeFeatureId === '__overview__' || features.length === 0;
 
   return (
     <div className="flex flex-col lg:flex-row gap-0 border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
@@ -53,14 +54,14 @@ export function WikiViewer({ data }: WikiViewerProps) {
               Overview
             </button>
           </li>
-          {data.features.length > 0 && (
+          {features.length > 0 && (
             <>
               <li className="px-3 pt-3 pb-1">
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   Features
                 </span>
               </li>
-              {data.features.map((feature) => (
+              {features.map((feature) => (
                 <li key={feature.id}>
                   <button
                     onClick={() => setActiveFeatureId(feature.id)}
