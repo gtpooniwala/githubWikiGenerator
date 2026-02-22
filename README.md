@@ -171,7 +171,23 @@ GitHub URL
 
 ### SSE streaming
 
-Progress events are pushed to the browser via Server-Sent Events (`GET /api/generate/stream`) so users see live status updates as each stage completes. The full blocking `run_pipeline()` then runs via a normal `POST /api/generate` call once the stream signals `done`.
+All ten pipeline stages run inside the SSE generator (`GET /api/generate/stream`). The browser receives a named event as each stage completes:
+
+| Event | Stage |
+|---|---|
+| `connecting` | Connection established |
+| `repo_loaded` | Snapshot fetched (file count + commit SHA) |
+| `signals_extracted` | README headings / routes / entry points |
+| `chunked` | File chunking complete |
+| `import_graph_built` | Import-graph edges counted |
+| `search_index_built` | BM25 index ready |
+| `features_proposed` | LLM identified N features (with titles) |
+| `evidence_gathered` | Evidence packs assembled |
+| `pages_written` | Feature pages written |
+| `overview_written` | Overview page written |
+| `done` | **Full `GenerateResponse` JSON as the event payload** |
+
+The frontend reads the `done` payload directly — no second `POST /api/generate` round-trip.
 
 See [guide.md](guide.md) for the full execution spec.
 
@@ -182,18 +198,18 @@ This project was built for the **cubic Coding Challenge** — a 48-hour sprint t
 
 ### What I’d improve with more time
 
-- **Live SSE pipeline** — the SSE stream currently stubs the LLM stages (feature proposals, page writing). Wiring the full `run_pipeline()` call into the stream would give real live progress for every stage instead of just repo-load and chunking.
+- **Parallel feature page writing** — feature pages are written sequentially (one LLM call completes before the next starts). All evidence packs are independent so this is trivially parallelisable with a thread pool, cutting total LLM wall-clock time from ~N×4s to ~4s regardless of feature count.
+- **Seed path and citation validation** — the LLM sometimes returns `seed_paths` that don't exist in the snapshot, silently producing thin evidence packs. Separately, the citation resolver converts any `[path:N-M]` pattern to a GitHub URL without checking the path was actually analyzed; hallucinated paths become valid-looking links that 404. Both are fixable with a membership check against the known file list and chunk ID set.
+- **Richer feature proposal context** — the LLM currently sees only file paths, README headings, and HTTP routes when proposing features. Adding the top-level symbol names per file (function/class names already identified by the chunker's semantic boundary pass) would give it real code signal at near-zero token cost and improve seed path accuracy for repos with sparse READMEs.
 - **Search / Q&A** across wiki pages — the bonus feature from the spec; a BM25 or embedding search over generated pages would be straightforward given the existing `SearchIndex` infrastructure.
-- **Better error UX** — surface rate-limit, private-repo, and timeout errors with actionable messages instead of generic failure states.
-- **Caching** — cache generated wikis by `(owner, repo, commit_sha)` in Cloud Firestore or Redis so repeat requests are instantly served.
-- **Streaming LLM responses** — pipe OpenAI stream tokens through SSE so users see text appearing rather than waiting for each page to fully complete.
+- **Caching** — cache generated wikis keyed by `(owner, repo, commit_sha)` so repeat requests on the same commit are instant and don't burn OpenAI quota.
 
 ### What isn’t production-ready
 
 - **No rate limiting** on the `/api/generate` endpoint — a single request triggers 10+ LLM calls and GitHub API fetches; without throttling this is DoS-able.
 - **No request queuing** — concurrent generate requests will compete for OpenAI quota and GitHub rate limits.
 - **Single Cloud Run instance** — the backend is stateless but cold-start latency (2–4 s) would need a min-instances setting for production traffic.
-- **LLM output quality** — citations can hallucinate line ranges that are adjacent but not exact; a post-processing verification step against the actual source lines would improve trust.
+- **Citation hallucination** — the LLM occasionally cites plausible-but-wrong line ranges; a post-generation step that checks cited ranges against the actual analyzed chunks (stripping or flagging those that don't match) would improve trust without requiring a second LLM call.
 - **No tests for the full live pipeline** — all LLM calls are mocked in tests; a lightweight integration test against a small known repo would catch prompt-regressions.
 
 ## Deployment

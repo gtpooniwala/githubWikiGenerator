@@ -1,11 +1,23 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { checkHealth as apiCheckHealth, generateWiki, GenerateResponse } from '@/lib/api';
+import { checkHealth as apiCheckHealth, GenerateResponse } from '@/lib/api';
 import { RepoForm } from '@/components/RepoForm';
 import { WikiViewer } from '@/components/WikiViewer';
 
-const SSE_EVENTS = ['connecting', 'repo_loaded', 'chunked', 'signals_extracted', 'features_proposed', 'pages_written', 'done'] as const;
+const SSE_EVENTS = [
+  'connecting',
+  'repo_loaded',
+  'signals_extracted',
+  'chunked',
+  'import_graph_built',
+  'search_index_built',
+  'features_proposed',
+  'evidence_gathered',
+  'pages_written',
+  'overview_written',
+  'done',
+] as const;
 
 interface StatusMessage {
   label: string;
@@ -13,7 +25,8 @@ interface StatusMessage {
 }
 
 function parseStatusDetail(event: string, data: Record<string, unknown>): string | undefined {
-  if (event === 'repo_loaded' && data.file_count != null) return `${data.file_count} files · commit ${String(data.commit_sha ?? '').slice(0, 7)}`;
+  if (event === 'repo_loaded' && data.file_count != null)
+    return `${data.file_count} files · commit ${String(data.commit_sha ?? '').slice(0, 7)}`;
   if (event === 'chunked' && data.chunk_count != null) return `${data.chunk_count} chunks`;
   if (event === 'signals_extracted') {
     const parts = [];
@@ -22,6 +35,14 @@ function parseStatusDetail(event: string, data: Record<string, unknown>): string
     if (data.entrypoints) parts.push(`${data.entrypoints} entrypoints`);
     return parts.length ? parts.join(' · ') : undefined;
   }
+  if (event === 'import_graph_built' && data.edges != null) return `${data.edges} edges`;
+  if (event === 'search_index_built' && data.indexed_chunks != null)
+    return `${data.indexed_chunks} chunks indexed`;
+  if (event === 'features_proposed' && Array.isArray(data.features))
+    return (data.features as Array<{ title: string }>).map((f) => f.title).join(', ');
+  if (event === 'evidence_gathered' && data.feature_count != null)
+    return `${data.feature_count} features`;
+  if (event === 'pages_written' || event === 'overview_written') return undefined;
   return undefined;
 }
 
@@ -69,17 +90,10 @@ export default function Home() {
         ]);
         if (eventName === 'done') {
           es.close();
-          // SSE pipeline complete — now fetch the full wiki result
-          generateWiki(repoUrl)
-            .then((data) => {
-              setWikiData(data);
-              setLoading(false);
-              setDone(true);
-            })
-            .catch((err: Error) => {
-              setError(err.message);
-              setLoading(false);
-            });
+          // The done payload IS the GenerateResponse — no second round-trip needed.
+          setWikiData(parsed as unknown as GenerateResponse);
+          setLoading(false);
+          setDone(true);
         }
       });
     });

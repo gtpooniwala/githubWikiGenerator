@@ -7,17 +7,52 @@ from fastapi.responses import StreamingResponse
 
 from auth import require_api_key
 from models.schemas import GenerateRequest, GenerateResponse
-from services.chunker import chunk_file
+from services import chunker as chunker_mod
+from services import import_graph as import_graph_mod
+from services.evidence import gather_all_evidence
 from services.pipeline import run_pipeline
+from services.propose_features import propose_features
 from services.repo_loader import load_snapshot
+from services.search_index import SearchIndex
 from services.signals import (
     RepoSignals,
     extract_entrypoints,
     extract_readme_signals,
     extract_route_signals,
 )
+from services.write_pages import write_all_feature_pages, write_overview_page
 
 router = APIRouter(prefix="/api")
+
+# Files whose raw content must be kept in memory through the LLM stages so
+# write_overview_page() can read them.  All other file content is freed after
+# chunking to reduce peak memory usage.
+_OVERVIEW_KEEP_CONTENT: frozenset[str] = frozenset(
+    {
+        "readme.md",
+        "readme.rst",
+        "readme.txt",
+        "readme",
+        "package.json",
+        "pyproject.toml",
+        "setup.py",
+        "setup.cfg",
+        "requirements.txt",
+        "cargo.toml",
+        "go.mod",
+        "main.py",
+        "__main__.py",
+        "app.py",
+        "server.py",
+        "index.ts",
+        "index.js",
+        "index.tsx",
+        "main.ts",
+        "app.ts",
+        "wsgi.py",
+        "asgi.py",
+    }
+)
 
 
 def _sse_message(event: str, data: dict) -> str:
@@ -34,18 +69,25 @@ def _parse_repo_id(repo_url: str) -> str:
 
 
 async def _run_pipeline(repo_url: str) -> AsyncIterator[str]:
-    """Run the implemented pipeline stages, yielding SSE messages as each completes."""
+    """Run the full pipeline, yielding SSE messages as each stage completes.
+
+    The final ``done`` event carries the complete :class:`GenerateResponse`
+    as its JSON payload so the browser can render the wiki without a second
+    round-trip to the backend.
+    """
     repo_id = _parse_repo_id(repo_url)
     owner, repo = repo_id.split("/", 1)
 
-    # Emit immediately so the browser's EventSource knows the connection is alive
-    # and the user sees feedback before the slow network I/O begins.
+    # Emit immediately so the browser knows the connection is alive before the
+    # first blocking network call.
     yield _sse_message(
         "connecting", {"message": f"Connecting to repository {owner}/{repo}…"}
     )
-    await asyncio.sleep(0)  # flush to client before blocking
+    await asyncio.sleep(0)
 
-    # Stage 1: Load repo snapshot (network I/O — offload to thread)
+    # ------------------------------------------------------------------
+    # Stage 1: Load repo snapshot (network I/O)
+    # ------------------------------------------------------------------
     snapshot = await asyncio.to_thread(load_snapshot, owner, repo)
     yield _sse_message(
         "repo_loaded",
@@ -57,28 +99,18 @@ async def _run_pipeline(repo_url: str) -> AsyncIterator[str]:
     )
     await asyncio.sleep(0)
 
-    # Stage 2: Chunk all files
-    all_chunks = []
-    for f in snapshot.files:
-        all_chunks.extend(chunk_file(f.path, f.content))
-    yield _sse_message(
-        "chunked",
-        {
-            "message": "Files chunked",
-            "chunk_count": len(all_chunks),
-        },
+    # ------------------------------------------------------------------
+    # Stage 2: Extract signals (README headings, HTTP routes, entry points)
+    # ------------------------------------------------------------------
+    readme_headings = (
+        extract_readme_signals(snapshot.readme.content) if snapshot.readme else []
     )
-    await asyncio.sleep(0)
-
-    # Stage 3: Extract signals (README headings, routes, entrypoints)
-    readme_file = next(
-        (f for f in snapshot.files if f.path.lower() in ("readme.md", "readme")), None
-    )
-    readme_md = readme_file.content if readme_file else ""
+    routes = extract_route_signals(snapshot.files)
+    entrypoints = extract_entrypoints(snapshot.files)
     signals = RepoSignals(
-        readme_headings=extract_readme_signals(readme_md),
-        routes=extract_route_signals(snapshot.files),
-        entrypoints=extract_entrypoints(snapshot.files),
+        readme_headings=readme_headings,
+        routes=routes,
+        entrypoints=entrypoints,
     )
     yield _sse_message(
         "signals_extracted",
@@ -91,11 +123,133 @@ async def _run_pipeline(repo_url: str) -> AsyncIterator[str]:
     )
     await asyncio.sleep(0)
 
-    yield _sse_message("features_proposed", {"message": "Features proposed"})
+    # ------------------------------------------------------------------
+    # Stage 3: Chunk all files
+    # ------------------------------------------------------------------
+    all_chunks = []
+    for f in snapshot.files:
+        all_chunks.extend(chunker_mod.chunk_file(f.path, f.content))
+    yield _sse_message(
+        "chunked",
+        {
+            "message": "Files chunked",
+            "chunk_count": len(all_chunks),
+        },
+    )
     await asyncio.sleep(0)
-    yield _sse_message("pages_written", {"message": "Pages written"})
+
+    # ------------------------------------------------------------------
+    # Stage 4: Build import graph (CPU-bound)
+    # ------------------------------------------------------------------
+    import_graph = await asyncio.to_thread(
+        import_graph_mod.build_import_graph, snapshot.files
+    )
+    edge_count = sum(len(v) for v in import_graph.values())
+    yield _sse_message(
+        "import_graph_built",
+        {
+            "message": "Import graph built",
+            "edges": edge_count,
+        },
+    )
     await asyncio.sleep(0)
-    yield _sse_message("done", {"message": "Complete"})
+
+    # Free raw file content that is not needed by write_overview_page() —
+    # chunks hold all the text required for LLM stages.
+    for fe in snapshot.files:
+        if fe.path.rsplit("/", 1)[-1].lower() not in _OVERVIEW_KEEP_CONTENT:
+            fe.content = ""
+
+    # ------------------------------------------------------------------
+    # Stage 5: Build BM25 search index
+    # ------------------------------------------------------------------
+    search_index = SearchIndex()
+    search_index.add_chunks(all_chunks)
+    yield _sse_message(
+        "search_index_built",
+        {
+            "message": "Search index built",
+            "indexed_chunks": len(all_chunks),
+        },
+    )
+    await asyncio.sleep(0)
+
+    # ------------------------------------------------------------------
+    # Stage 6: Propose features (LLM)
+    # ------------------------------------------------------------------
+    proposal = await asyncio.to_thread(propose_features, snapshot, signals)
+    features = proposal.features
+    yield _sse_message(
+        "features_proposed",
+        {
+            "message": f"{len(features)} features identified",
+            "features": [{"id": f.id, "title": f.title} for f in features],
+        },
+    )
+    await asyncio.sleep(0)
+
+    # ------------------------------------------------------------------
+    # Stage 7: Gather evidence (seed → import-graph expand → BM25 → dedup)
+    # ------------------------------------------------------------------
+    packs = await asyncio.to_thread(
+        gather_all_evidence, features, all_chunks, import_graph, search_index
+    )
+    yield _sse_message(
+        "evidence_gathered",
+        {
+            "message": "Evidence gathered",
+            "feature_count": len(packs),
+        },
+    )
+    await asyncio.sleep(0)
+
+    # ------------------------------------------------------------------
+    # Stage 8: Write feature pages (LLM × N)
+    # ------------------------------------------------------------------
+    wiki_features = await asyncio.to_thread(
+        write_all_feature_pages,
+        features,
+        packs,
+        owner=owner,
+        repo=repo,
+        commit_sha=snapshot.commit_sha,
+    )
+    yield _sse_message(
+        "pages_written",
+        {
+            "message": f"{len(wiki_features)} feature pages written",
+        },
+    )
+    await asyncio.sleep(0)
+
+    # ------------------------------------------------------------------
+    # Stage 9: Write overview page (LLM)
+    # ------------------------------------------------------------------
+    overview_md = await asyncio.to_thread(
+        write_overview_page,
+        snapshot,
+        owner=owner,
+        repo=repo,
+        commit_sha=snapshot.commit_sha,
+    )
+    yield _sse_message(
+        "overview_written",
+        {
+            "message": "Overview page written",
+        },
+    )
+    await asyncio.sleep(0)
+
+    # ------------------------------------------------------------------
+    # Stage 10: Assemble and return — full payload in the done event
+    # ------------------------------------------------------------------
+    response = GenerateResponse(
+        repo_id=f"{owner}/{repo}",
+        commit_sha=snapshot.commit_sha,
+        overview_md=overview_md,
+        features=wiki_features,
+    )
+    yield _sse_message("done", response.model_dump())
 
 
 @router.get("/generate/stream")
@@ -103,8 +257,12 @@ async def generate_stream(
     repo_url: str = Query(..., description="Full GitHub repository URL"),
     _: None = Depends(require_api_key),
 ):
-    """SSE endpoint that runs implemented pipeline stages and emits real progress events.
-    LLM stages (features_proposed, pages_written) are stubs until Step 19."""
+    """SSE endpoint — runs the full pipeline and streams real progress events.
+
+    Every pipeline stage emits an event when it completes.  The final ``done``
+    event payload is the complete ``GenerateResponse`` JSON so the browser can
+    render the wiki without a second round-trip.
+    """
 
     async def event_gen():
         try:
