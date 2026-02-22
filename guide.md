@@ -93,18 +93,20 @@ Step X: <short name>
 | 6 | Chunker | `3bf53cb` | `services/chunker.py` — semantic + sliding window |
 | 7 | Signals extraction | `4caff95` | `services/signals.py` — README, routes, entrypoints |
 | 7a | Bug-fix pass (Steps 1–7) | `bc154ec` | `_parse_repo_id` rstrip→removesuffix; CI deploy URL fix; `GenerateResponse` type fix; `--allow-unauthenticated` added to both CI workflows |
+| 8 | Frontend proxy route + Vitest | `5afdbc6` | `vitest.config.ts`, `vitest.setup.ts`, `tests/route-generate.test.ts` — 7 frontend tests |
 
-**74 tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`.
+**74 backend tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`.
+**7 frontend tests passing** in `tests/route-generate.test.ts`.
 
 ### Next Step
 
-**STEP 8: Frontend – Proxy `/api/generate` Route + UI MVP + Real-time Status**
+**STEP 9: Frontend – UI MVP (Form + Render)**
 
 ### Deployment
 
 * **Backend Cloud Run URL:** `https://wiki-generator-backend-ud74aktrjq-uc.a.run.app`
 * **GCP project:** `pushstart-481717`, region `us-central1`
-* **Latest deployed commit:** `4caff95` (Step 7)
+* **Latest deployed commit:** `5afdbc6` (Step 8)
 * Smoke checks: `GET /health` → `{"status":"healthy"}` ✅
 
 ### Critical Technical Context (for new sessions)
@@ -162,7 +164,6 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 
 ### Items Pending ❗
 
-* **Step 8** – Frontend proxy `/api/generate` route (Vitest setup + route tests)
 * **Step 9** – Frontend UI MVP (form, markdown render, loading/error states)
 * **Step 10** – Frontend real-time status via SSE (backend stub + frontend stream consumer)
 * **Steps 11–19** – Backend pipeline: import graph → search index → LLM client → feature proposals → evidence gathering → page writing → overview page → pipeline orchestrator → wire endpoint
