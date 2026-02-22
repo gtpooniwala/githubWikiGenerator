@@ -91,54 +91,16 @@ npm run dev    # http://localhost:3000
 
 ## API
 
-### `GET /health`
+All backend endpoints are behind `x-api-key: <BACKEND_API_KEY>`. The frontend proxies each one via Next.js route handlers under `frontend/src/app/api/`.
 
-```json
-{ "status": "healthy" }
-```
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/health` | GET | Health check — `{ "status": "healthy" }` |
+| `/api/generate` | POST | Run full pipeline, return `GenerateResponse` |
+| `/api/generate/stream` | GET (SSE) | Run pipeline, stream stage events, `done` carries full payload |
+| `/api/qa` | POST | Answer a question using the generated wiki as context |
 
-### `POST /api/generate`
-
-Headers: `x-api-key: <BACKEND_API_KEY>`
-
-Request:
-
-```json
-{ "repo_url": "https://github.com/owner/repo" }
-```
-
-Response:
-
-```json
-{
-  "repo_id": "owner/repo",
-  "commit_sha": "<sha>",
-  "overview_md": "...",
-  "features": [
-    { "id": "slug", "title": "...", "description": "...", "content_md": "..." }
-  ]
-}
-```
-
-### `POST /api/qa`
-Headers: `x-api-key: <BACKEND_API_KEY>`
-
-Request:
-```json
-{
-  "repo_id": "owner/repo",
-  "question": "How does authentication work?",
-  "overview_md": "...",
-  "features": [{ "id": "...", "title": "...", "description": "...", "content_md": "..." }]
-}
-```
-
-Response:
-```json
-{ "answer": "..." }
-```
-
-The full wiki (overview + all feature pages) is passed as context in a single LLM call. No retrieval step is needed — the complete wiki fits well within `gpt-5-mini`'s 400,000 token context window.
+Full request/response schemas, SSE event shapes, and auth patterns are in [guide.md](guide.md).
 
 ## How It Works
 
@@ -216,9 +178,26 @@ All nine pipeline stages run inside the SSE generator (`GET /api/generate/stream
 
 The frontend reads the `done` payload directly — no second `POST /api/generate` round-trip.
 
-See [guide.md](guide.md) for the full execution spec.
+See [guide.md](guide.md) for full schemas, SSE event payloads, and local dev details.
 For architectural tradeoffs and planned retrieval/chunking upgrades, see [pipeline-improvements.md](pipeline-improvements.md).
 
+---
+
+## Where to look in the code
+
+- **Pipeline orchestrator:** `backend/src/services/pipeline.py` — `run_pipeline()` wires all 9 stages end-to-end
+- **Evidence gathering:** `backend/src/services/evidence.py` — seed files → import-graph BFS → BM25 search → bounded dedup
+- **Page writing + citations:** `backend/src/services/write_pages.py` + `backend/src/services/citations.py` — LLM drafts pages, `[path:start-end]` IDs are resolved to GitHub permalink URLs
+- **SSE streaming:** `backend/src/routers/generate.py` — `_pipeline_stages()` posts to a queue; keepalive task prevents proxy timeouts
+- **Frontend rendering:** `frontend/src/app/page.tsx` (SSE consumer + router) and `frontend/src/components/WikiViewer.tsx` (tabbed wiki + Q&A panel)
+- **Auth middleware:** `backend/src/auth.py` + `backend/src/config.py`
+- **CI/CD:** `.github/workflows/test.yml`, `deploy-backend.yml`, `deploy-frontend.yml`
+
+## Design Choices
+
+- **Feature-first organisation** — output is structured around user-facing features, not code layers. This forces the LLM to reason about intent rather than implementation topology. See [pipeline-improvements.md](pipeline-improvements.md) for the tradeoffs in how features are proposed.
+- **Deterministic retrieval before any LLM call** — evidence is assembled via BM25 + import-graph traversal with stable, bounded chunk IDs anchored to a single commit SHA. The LLM only writes; it doesn't retrieve. See [pipeline-improvements.md](pipeline-improvements.md) for audit and planned improvements.
+- **SSE-first, no polling** — the pipeline runs entirely inside the SSE generator; the `done` event carries the full wiki payload so the frontend needs no second round-trip. See [guide.md](guide.md) for the event sequence.
 
 ## Challenge Notes
 
@@ -228,26 +207,20 @@ Detailed rationale and alternatives for pipeline quality improvements are docume
 
 ### What I’d improve with more time
 
-- **Chunking and graph creation strategy** — current chunking is mostly line-window based with regex semantic hints, and graph expansion is file-level + outgoing imports only. This can introduce noisy evidence and miss caller-side context. Planned upgrades (AST/tree-sitter chunking, reverse edges, and symbol-aware traversal) are described in [pipeline-improvements.md](pipeline-improvements.md).
-- **Parallel feature page writing** — feature pages are written sequentially (one LLM call completes before the next starts). All evidence packs are independent so this is trivially parallelisable with a thread pool, cutting total LLM wall-clock time from ~N×4s to ~4s regardless of feature count.
-- **Seed path and citation validation** — the LLM can hallucinate `seed_paths` that don't exist in the snapshot, silently producing thin evidence packs. Separately, the citation resolver converts any `[path:N-M]` pattern to a GitHub URL without checking the path was actually analyzed; hallucinated paths become valid-looking links that 404. Both are fixable with a membership check against the known file list and chunk ID set.
-- **Richer feature proposal context** — the LLM currently sees only file paths, README headings, and HTTP routes when proposing features. Adding the top-level symbol names per file (function/class names already identified by the chunker's semantic boundary pass) would give it real code signal at near-zero token cost and improve seed path accuracy for repos with sparse READMEs.
-- **Caching** — cache downloaded files and embeddings keyed by `(owner, repo, commit_sha)` so repeat requests on the same commit are instant.
-- **Database**- Save previously generated wikis and chat history in a simple database (eg. SQLite) keyed by `repo_id + commit_sha`. This would allow instant retrieval of prior wikis without re-running the pipeline. A "Regenerate wiki" button could trigger a fresh generation while keeping the old wiki available for comparison.
-- **Q&A chat history** — the "Ask the wiki" sidebar panel currently has no persistent conversation history; each question is answered in isolation with no memory of prior turns. Implementing a React context (or Zustand store) to retain `qaPairs` at the app level, combined with a multi-turn prompt that includes prior exchanges, would let users build on previous answers and reference earlier responses. Session storage could persist the history across page navigations without any backend changes.
+- **Chunking and citation quality** — chunking is regex-based with semantic hints; graph expansion is file-level and outgoing-only, which can miss caller context and produce noisy evidence packs. The LLM can also hallucinate seed paths and line ranges that produce valid-looking 404 citation links. AST/tree-sitter chunking, reverse-edge traversal, and strict citation validation would all materially improve output quality. Full audit and ranked improvement options are in [pipeline-improvements.md](pipeline-improvements.md).
+- **Parallel feature page writing** — feature pages are written sequentially; all evidence packs are independent so this is trivially parallelisable with a thread pool, cutting LLM wall-clock time from ~N×4s to ~4s regardless of feature count.
+- **Caching and persistence** — no caching keyed by `(repo, commit_sha)` exists today; repeat requests re-run the full pipeline. A simple store (even SQLite) would make re-visits instant and enable a “Regenerate” flow.
+- **Testing coverage and evaluation harness** — all LLM calls are mocked in tests; there is no integration test against a live repo or benchmark set to catch prompt regressions or measure citation quality. See [pipeline-improvements.md](pipeline-improvements.md) for a proposed evaluation approach.
 
 ### Bonus features implemented
 
-- **Q&A across the wiki** — an "Ask the wiki" panel lives at the bottom of every wiki page. The full generated wiki (overview + all feature pages, typically 3–8k tokens) is passed as context to a single `gpt-5-mini` call, giving the model cross-page awareness. No retrieval step is needed at this scale.
+- **Q&A across the wiki** — an “Ask the wiki” panel lives in the sidebar of every wiki page. The full generated wiki (overview + all feature pages, typically 3–8k tokens) is passed as context to a single `gpt-5-mini` call, giving the model cross-page awareness. No retrieval step is needed at this scale.
 
 ### What isn’t production-ready
 
-- **Scaling testing** — the system is only tested against a handful of small-to-medium repos. It should work in theory on any public GitHub repo, but without testing against a wider variety of codebases, languages and styles there may be edge cases that break the pipeline or produce poor output.
-- **No rate limiting** on the `/api/generate` endpoint — a single request triggers 10+ LLM calls and GitHub API fetches; without throttling this is DoS-able.
-- **No request queuing** — concurrent generate requests will compete for OpenAI quota and GitHub rate limits.
-- **Single Cloud Run instance** — the backend is stateless but cold-start latency (2–4 s) would need a min-instances setting for production traffic.
-- **Citation hallucination** — the LLM can cite plausible-but-wrong line ranges; a post-generation step that checks cited ranges against the actual analyzed chunks (stripping or flagging those that don't match) would improve trust without requiring a second LLM call.
-- **No tests for the full live pipeline** — all LLM calls are mocked in tests; a lightweight integration test against a small known repo would catch prompt-regressions.
+- **No rate limiting or request queuing** on `/api/generate` — a single request triggers ~10 LLM calls and multiple GitHub API fetches; without throttling, concurrent requests compete for quota and the endpoint is DoS-able.
+- **Single Cloud Run instance** — the backend is stateless but would need a `min-instances` setting and autoscaling config for production traffic.
+- **Limited repo coverage** — tested against a handful of small-to-medium repos. Larger or unusual codebases may hit edge cases in the chunker, import graph, or evidence gatherer.
 
 ## Deployment
 

@@ -20,7 +20,7 @@ A deployed web app that generates a navigable, cited wiki for any public GitHub 
 |--------------------|-------------------------------------------------------------|
 | Frontend           | Next.js (TypeScript, App Router), deployed to GCP Cloud Run |
 | Backend            | FastAPI (Python), deployed to GCP Cloud Run                 |
-| LLM                | OpenAI SDK (`gpt-4o-mini`; backend-only)                    |
+| LLM                | OpenAI SDK (`gpt-5-mini`; backend-only)                    |
 | Repo fetch         | GitHub REST API (optional token for higher rate limits)     |
 | Backend tests      | pytest + respx + pytest-asyncio                             |
 | Frontend tests     | Vitest + React Testing Library                              |
@@ -105,7 +105,7 @@ services/
 
 ### Pipeline Stages (SSE stream order)
 
-`repo_loaded` → `chunked` → `signals_extracted` → `features_proposed` → `pages_written` → `done` (or `error`)
+`connecting` (connection event) → `repo_loaded` → `signals_extracted` → `chunked` → `import_graph_built` → `search_index_built` → `features_proposed` → `evidence_gathered` → `pages_written` → `overview_written` → `done` (terminal event, carries full `GenerateResponse`)
 
 `GET /api/generate/stream?repo_url=<url>` streams `text/event-stream`; each `data:` payload is JSON `{ "message": "...", ...stage fields }`. The Next.js proxy at `frontend/src/app/api/generate/stream/route.ts` forwards the `repo_url` param and `x-api-key` header. The browser `EventSource` in `page.tsx` renders live status + the final wiki on `done`.
 
@@ -160,7 +160,7 @@ lib/
 
 **`POST /api/qa`**
 - Headers: `x-api-key: <BACKEND_API_KEY>`
-- Body: `{ "repo_id": "owner/repo", "question": "...", "wiki_context": "..." }`
+- Body: `{ "repo_id": "owner/repo", "question": "...", "overview_md": "...", "features": [...] }`
 - Response: `{ "answer": "..." }`
 
 ### Frontend proxies (Next.js route handlers)
@@ -183,7 +183,7 @@ lib/
 | `BACKEND_API_KEY` | Backend Cloud Run + local `.env` | App-level auth key; no hardcoded default — if unset, all auth fails |
 | `OPENAI_API_KEY` | Backend Cloud Run + local `.env` | Never expose to frontend |
 | `GITHUB_TOKEN` | Backend Cloud Run + local `.env` | Optional; raises rate limit from 60 → 5000 req/hr |
-| `NEXT_PUBLIC_BACKEND_URL` | Frontend Cloud Run | Points frontend proxy to backend service URL |
+| `BACKEND_URL` | Frontend Cloud Run + local `.env` | Points frontend proxy to backend service URL |
 
 ### Running Tests
 

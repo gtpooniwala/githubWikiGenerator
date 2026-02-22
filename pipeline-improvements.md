@@ -30,12 +30,6 @@ Operational concerns (parallelization, caching, queueing, autoscaling) are still
 
 The pipeline runs deterministically against one commit SHA and returns `GenerateResponse`.
 
-## Stage 0 — Parse and normalize repo identity
-
-- Input: GitHub URL (`https://github.com/owner/repo`)
-- Logic: parse owner/repo, validate URL shape
-- Output: `(owner, repo)` identifiers used by all downstream stages
-
 ## Stage 1 — Load repository snapshot (GitHub API)
 
 - Service: `repo_loader.py`
@@ -336,7 +330,7 @@ Use when:
 
 - Python AST chunking + fallback
 - Evidence budget allocation by source
-- Add benchmark harness for quality/regression tracking
+- **Evaluation harness and benchmark set** — currently there are no integration tests against live repos and no benchmark set to track quality regressions. A small fixed set of diverse repos with manually verified expected outputs (feature count, citation validity, overview accuracy) would make it possible to measure whether any improvement actually helps. Without this, iterating on chunking or evidence logic is essentially blind. This item also covers the general lack of pipeline coverage testing noted elsewhere.
 
 ## Phase 3 (long)
 
