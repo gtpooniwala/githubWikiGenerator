@@ -49,7 +49,9 @@ def _normalise(path: str) -> str:
     return posixpath.normpath(path)
 
 
-def _resolve_relative_js(source_file: str, specifier: str, repo_paths: set[str]) -> str | None:
+def _resolve_relative_js(
+    source_file: str, specifier: str, repo_paths: set[str]
+) -> str | None:
     """Resolve a relative JS/TS import specifier to a repo path, or None."""
     if not specifier.startswith("."):
         return None  # external package
@@ -172,7 +174,9 @@ def build_import_graph(files: list[FileEntry]) -> ImportGraph:
                     # absolute: try the module itself first, then module.name as submodule
                     resolved = _resolve_python_import(path, specifier, repo_paths)
                     if resolved is None and specifier:
-                        resolved = _resolve_python_import(path, specifier + "." + imported_name, repo_paths)
+                        resolved = _resolve_python_import(
+                            path, specifier + "." + imported_name, repo_paths
+                        )
                 if resolved and resolved != path:
                     graph[path].add(resolved)
 

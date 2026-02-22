@@ -141,7 +141,7 @@ This project was built for the **cubic Coding Challenge** — a 48-hour sprint t
 - **No rate limiting** on the `/api/generate` endpoint — a single request triggers 10+ LLM calls and GitHub API fetches; without throttling this is DoS-able.
 - **No request queuing** — concurrent generate requests will compete for OpenAI quota and GitHub rate limits.
 - **Single Cloud Run instance** — the backend is stateless but cold-start latency (2–4 s) would need a min-instances setting for production traffic.
-- **LLM output quality** — citations occasionally hallucinate line ranges that are adjacent but not exact; a post-processing verification step against the actual source lines would improve trust.
+- **LLM output quality** — citations can hallucinate line ranges that are adjacent but not exact; a post-processing verification step against the actual source lines would improve trust.
 - **No tests for the full live pipeline** — all LLM calls are mocked in tests; a lightweight integration test against a small known repo would catch prompt-regressions.
 
 ## Deployment

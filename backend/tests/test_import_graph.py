@@ -14,6 +14,7 @@ def _file(path: str, content: str = "") -> FileEntry:
 # Python – absolute imports
 # ---------------------------------------------------------------------------
 
+
 class TestPythonAbsoluteImports:
     def test_simple_import(self):
         files = [
@@ -70,6 +71,7 @@ class TestPythonAbsoluteImports:
 # Python – relative imports
 # ---------------------------------------------------------------------------
 
+
 class TestPythonRelativeImports:
     def test_dot_import_same_package(self):
         files = [
@@ -108,6 +110,7 @@ class TestPythonRelativeImports:
 # JS / TS imports
 # ---------------------------------------------------------------------------
 
+
 class TestJavaScriptImports:
     def test_relative_named_import(self):
         files = [
@@ -143,7 +146,10 @@ class TestJavaScriptImports:
 
     def test_external_npm_package_ignored(self):
         files = [
-            _file("src/page.tsx", "import React from 'react'\nimport { useState } from 'react'"),
+            _file(
+                "src/page.tsx",
+                "import React from 'react'\nimport { useState } from 'react'",
+            ),
         ]
         g = build_import_graph(files)
         assert g["src/page.tsx"] == []
@@ -160,6 +166,7 @@ class TestJavaScriptImports:
 # ---------------------------------------------------------------------------
 # Graph structure guarantees
 # ---------------------------------------------------------------------------
+
 
 class TestGraphStructure:
     def test_every_file_appears_as_key(self):
