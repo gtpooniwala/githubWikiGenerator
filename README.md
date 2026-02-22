@@ -229,19 +229,23 @@ All ten pipeline stages run inside the SSE generator (`GET /api/generate/stream`
 The frontend reads the `done` payload directly — no second `POST /api/generate` round-trip.
 
 See [guide.md](guide.md) for the full execution spec.
+For architectural tradeoffs and planned retrieval/chunking upgrades, see [pipeline-improvements.md](pipeline-improvements.md).
 
 
 ## Challenge Notes
 
 This project was built for the **cubic Coding Challenge** — a 48-hour sprint to build an automatic wiki generator for public GitHub repos.
 
+Detailed rationale and alternatives for pipeline quality improvements are documented in [pipeline-improvements.md](pipeline-improvements.md).
+
 ### What I’d improve with more time
 
+- **Chunking and graph creation strategy** — current chunking is mostly line-window based with regex semantic hints, and graph expansion is file-level + outgoing imports only. This can introduce noisy evidence and miss caller-side context. Planned upgrades (AST/tree-sitter chunking, reverse edges, and symbol-aware traversal) are described in [pipeline-improvements.md](pipeline-improvements.md).
 - **Parallel feature page writing** — feature pages are written sequentially (one LLM call completes before the next starts). All evidence packs are independent so this is trivially parallelisable with a thread pool, cutting total LLM wall-clock time from ~N×4s to ~4s regardless of feature count.
-- **Seed path and citation validation** — the LLM sometimes returns `seed_paths` that don't exist in the snapshot, silently producing thin evidence packs. Separately, the citation resolver converts any `[path:N-M]` pattern to a GitHub URL without checking the path was actually analyzed; hallucinated paths become valid-looking links that 404. Both are fixable with a membership check against the known file list and chunk ID set.
+- **Seed path and citation validation** — the LLM can hallucinate `seed_paths` that don't exist in the snapshot, silently producing thin evidence packs. Separately, the citation resolver converts any `[path:N-M]` pattern to a GitHub URL without checking the path was actually analyzed; hallucinated paths become valid-looking links that 404. Both are fixable with a membership check against the known file list and chunk ID set.
 - **Richer feature proposal context** — the LLM currently sees only file paths, README headings, and HTTP routes when proposing features. Adding the top-level symbol names per file (function/class names already identified by the chunker's semantic boundary pass) would give it real code signal at near-zero token cost and improve seed path accuracy for repos with sparse READMEs.
-- **Caching** — cache generated wikis or downloaded files keyed by `(owner, repo, commit_sha)` so repeat requests on the same commit are instant and don't burn OpenAI quota.
-- **Chunking strategy** — the current line-based chunking is simple and robust across languages, but it produces noisy chunks that split logical blocks of code. A smarter strategy(eg. AST based) that respects function and class boundaries would produce more coherent feature pages with fewer citations. It would need to be tested against a variety of languages and styles to ensure it doesnt fail on less common ones, but it would be a big win for codebases that follow common conventions.
+- **Caching** — cache downloaded files and embeddings keyed by `(owner, repo, commit_sha)` so repeat requests on the same commit are instant.
+- **Database**- Save previously generated wikis and chat history in a simple database (eg. SQLite) keyed by `repo_id + commit_sha`. This would allow instant retrieval of prior wikis without re-running the pipeline. A "Regenerate wiki" button could trigger a fresh generation while keeping the old wiki available for comparison.
 - **Q&A chat history** — the "Ask the wiki" sidebar panel currently has no persistent conversation history; each question is answered in isolation with no memory of prior turns. Implementing a React context (or Zustand store) to retain `qaPairs` at the app level, combined with a multi-turn prompt that includes prior exchanges, would let users build on previous answers and reference earlier responses. Session storage could persist the history across page navigations without any backend changes.
 
 ### Bonus features implemented
