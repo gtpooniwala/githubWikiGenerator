@@ -252,9 +252,14 @@ These are ranked by impact-to-complexity.
    - Also include reverse-edge graph expansion
 
 2. **Improve graph traversal logic**
+   - Build an AST- or symbol-level dependency graph that extracts functions/classes/exports and symbol-to-symbol references, enabling bi-directional, symbol-precise traversal
    - Add relevance heuristics to prioritize which neighbors to include (e.g., prefer files with similar embeddings, more seeds or with certain signal types)
    - Reserve chunk budget slices by source (seed/graph/search) rather than first-come truncation
    - Why worth it: avoids one source dominating evidence pack quality
+
+3. **Feature proposal improvements**
+    - Rewrite proposed feature descriptions after evidence collection with an LLM pass to fix any hallucinations and add relevant technical details
+    - Better/more context signals in original pass(e.g., symbol inventories, test files, code comments)
 
 ## Tier 3 — Advanced options (only when justified)
 

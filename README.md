@@ -28,6 +28,22 @@ The output includes an **Overview page** (what the project does, architecture, q
 
 ---
 
+## Screenshots
+
+**Home page** — paste any public GitHub URL and click Generate Wiki.
+
+![Home page](docs/screenshots/homepage.png)
+
+**Live progress** — the Status tab streams each pipeline stage as it completes.
+
+![SSE progress](docs/screenshots/sse.png)
+
+**Generated wiki** — tabbed feature pages with inline source citations, plus the Ask the wiki Q&A panel.
+
+![Wiki viewer](docs/screenshots/wiki.png)
+
+---
+
 
 ## Architecture
 
