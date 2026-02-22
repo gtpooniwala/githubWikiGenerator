@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from auth import require_api_key
 from models.schemas import QARequest, QAResponse
 from services import llm
+from services.citations import resolve_citations
 
 router = APIRouter(prefix="/api")
 
@@ -30,6 +31,17 @@ Answer the user's question accurately and concisely.  Where relevant, \
 reference specific feature names or sections from the wiki.  If the wiki \
 does not contain enough information to answer the question confidently, say so \
 rather than guessing.  Keep answers to 2–5 short paragraphs.
+
+Citation rules (follow exactly):
+- When referencing a specific file or code location, always use the inline \
+  citation format: [path/to/file.ext:start_line-end_line]
+- Cite using the EXACT paths and line numbers that appear in the wiki \
+  evidence.  Do NOT invent paths or line numbers.
+- Embed citations naturally at the end of the sentence they support, \
+  not in a separate list.
+- Do NOT use plain-text references like "(see file.py)" or \
+  "(see auth.py)".  Use the citation format instead.
+- Do NOT repeat the same citation more than once per paragraph.
 """
 
 # Hard limit on how large the wiki context can grow before we truncate.
@@ -78,5 +90,10 @@ def qa(body: QARequest, _: None = Depends(require_api_key)) -> QAResponse:
         answer = llm.chat_text(_SYSTEM, user_message)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    # Resolve any [path:start-end] citations the LLM emitted to GitHub permalinks.
+    owner, _, repo = body.repo_id.partition("/")
+    if owner and repo and body.commit_sha:
+        answer = resolve_citations(answer, owner, repo, body.commit_sha)
 
     return QAResponse(answer=answer)

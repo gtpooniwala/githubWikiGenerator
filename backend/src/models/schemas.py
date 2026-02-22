@@ -21,6 +21,7 @@ class GenerateResponse(BaseModel):
 
 class QARequest(BaseModel):
     repo_id: str
+    commit_sha: str
     question: str
     overview_md: str
     features: list[WikiFeature]

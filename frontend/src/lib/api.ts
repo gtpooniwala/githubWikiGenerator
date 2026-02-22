@@ -57,6 +57,7 @@ export async function askQuestion(
     body: JSON.stringify({
       question,
       repo_id: wiki.repo_id,
+      commit_sha: wiki.commit_sha,
       overview_md: wiki.overview_md,
       features: wiki.features,
     }),

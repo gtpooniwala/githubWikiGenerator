@@ -30,6 +30,7 @@ SAMPLE_FEATURES = [
 
 SAMPLE_REQUEST_BODY = {
     "repo_id": "owner/repo",
+    "commit_sha": "abc1234",
     "question": "How does authentication work?",
     "overview_md": "## Overview\n\nThis repo is a demo app.",
     "features": [f.model_dump() for f in SAMPLE_FEATURES],
@@ -114,6 +115,7 @@ def test_qa_passes_correct_system_and_user_message():
 def test_qa_with_no_features():
     body = {
         "repo_id": "owner/minimal",
+        "commit_sha": "abc1234",
         "question": "What does this do?",
         "overview_md": "A minimal project.",
         "features": [],
@@ -170,9 +172,25 @@ def test_qa_llm_error_returns_502():
 # ---------------------------------------------------------------------------
 
 
+def test_qa_resolves_citations_in_answer():
+    """Citations in the LLM answer should be resolved to GitHub permalink URLs."""
+    raw_answer = "Auth is handled in [backend/src/auth.py:1-10]."
+    with patch("routers.qa.llm.chat_text", return_value=raw_answer):
+        response = client.post(
+            "/api/qa",
+            json=SAMPLE_REQUEST_BODY,
+            headers={"x-api-key": VALID_KEY},
+        )
+    assert response.status_code == 200
+    answer = response.json()["answer"]
+    assert "github.com" in answer
+    assert "#L1-L10" in answer
+
+
 def test_build_user_message_contains_all_sections():
     request = QARequest(
         repo_id="owner/repo",
+        commit_sha="abc1234",
         question="What search algorithm is used?",
         overview_md="## Overview\n\nDemo app.",
         features=SAMPLE_FEATURES,
@@ -190,6 +208,7 @@ def test_build_user_message_contains_all_sections():
 def test_build_user_message_includes_feature_description():
     request = QARequest(
         repo_id="owner/repo",
+        commit_sha="abc1234",
         question="Q?",
         overview_md="Overview.",
         features=SAMPLE_FEATURES,
@@ -202,6 +221,7 @@ def test_build_user_message_truncates_very_large_wiki():
     huge_overview = "x" * 90_000
     request = QARequest(
         repo_id="owner/repo",
+        commit_sha="abc1234",
         question="Q?",
         overview_md=huge_overview,
         features=[],

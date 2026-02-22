@@ -6,7 +6,7 @@ const BACKEND_API_KEY = process.env.BACKEND_API_KEY || '';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { question, repo_id, overview_md, features } = body;
+    const { question, repo_id, commit_sha, overview_md, features } = body;
 
     if (!question || typeof question !== 'string' || !question.trim()) {
       return NextResponse.json({ detail: 'question is required' }, { status: 400 });
@@ -19,9 +19,9 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key':BACKEND_API_KEY,
+        'x-api-key': BACKEND_API_KEY,
       },
-      body: JSON.stringify({ question, repo_id, overview_md, features: features ?? [] }),
+      body: JSON.stringify({ question, repo_id, commit_sha: commit_sha ?? '', overview_md, features: features ?? [] }),
     });
 
     const data = await response.json();
