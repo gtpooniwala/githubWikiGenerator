@@ -102,14 +102,15 @@ Step X: <short name>
 | 14 | Feature proposals | `4645e1b` | `services/propose_features.py` — LLM-driven, banned-word filter, slug normalisation; 31 tests |
 | — | Health check button in header | `fc3c067` | `page.tsx` — reusable `api.checkHealth`, button in header; frontend-only |  
 | — | Fix SSE stream flush | `2a31a7a` | `generate.py` — emit events one-by-one with `asyncio.sleep(0)` flush; `connecting` event added; 2 test updates |
-| 15 | Evidence gathering | `pending` | `services/evidence.py` — seed→import-graph BFS→search hits, dedup, max_chunks/max_chars bounds; 24 tests |
+| 15 | Evidence gathering | `0bee742` | `services/evidence.py` — seed→import-graph BFS→search hits, dedup, max_chunks/max_chars bounds; 24 tests |
+| 16 | Page writing + citations | `pending` | `services/citations.py` + `services/write_pages.py` — [path:start-end] → GitHub permalink links; per-feature LLM page writer; 38 tests |
 
-**212 backend tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`, `test_generate_stream`, `test_import_graph`, `test_search_index`, `test_llm`, `test_propose_features`, `test_evidence`.
+**250 backend tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`, `test_generate_stream`, `test_import_graph`, `test_search_index`, `test_llm`, `test_propose_features`, `test_evidence`, `test_citations`, `test_write_pages`.
 **25 frontend tests passing**: `route-generate.test.ts` (7) + `route-stream.test.ts` (5) + `ui-basic.test.tsx` (13).
 
 ### Next Step
 
-**STEP 16: Backend – Page Writing (LLM) With Chunk Citations**
+**STEP 17: Backend – Overview Page (LLM)**
 
 ### Deployment
 
@@ -157,7 +158,9 @@ backend/src/
     ├── search_index.py   # SearchIndex.from_chunks(chunks); BM25 + substring fallback
     ├── llm.py            # chat_text(), chat_json(schema) — OpenAI wrapper with retries
     ├── propose_features.py  # propose_features(snapshot, signals) -> FeatureProposalList
-    └── evidence.py       # gather_evidence(feature, chunks, graph, index) -> EvidencePack; gather_all_evidence()
+    ├── evidence.py       # gather_evidence(feature, chunks, graph, index) -> EvidencePack; gather_all_evidence()
+    ├── citations.py      # resolve_citations(md, owner, repo, sha) — [path:start-end] → GitHub permalink links
+    └── write_pages.py    # write_feature_page(feature, pack, owner, repo, sha) -> WikiFeature; write_all_feature_pages()
 ```
 `PYTHONPATH=/app/src` in Dockerfile; `pythonpath = src` in `pytest.ini`.
 
