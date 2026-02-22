@@ -92,6 +92,7 @@ Step X: <short name>
 | 5 | GitHub repo snapshot | `764a1f8` | `services/github_client.py`, `file_filter.py`, `repo_loader.py` |
 | 6 | Chunker | `3bf53cb` | `services/chunker.py` — semantic + sliding window |
 | 7 | Signals extraction | `4caff95` | `services/signals.py` — README, routes, entrypoints |
+| 7a | Bug-fix pass (Steps 1–7) | `bc154ec` | `_parse_repo_id` rstrip→removesuffix; CI deploy URL fix; `GenerateResponse` type fix; `--allow-unauthenticated` added to both CI workflows |
 
 **74 tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`.
 
@@ -141,8 +142,8 @@ backend/src/
 ```
 `PYTHONPATH=/app/src` in Dockerfile; `pythonpath = src` in `pytest.ini`.
 
-#### Frontend Route (Known Bug)
-`frontend/src/app/api/generate/route.ts` exists but passes `repo_url` as a **query param** instead of a JSON body — this will fail against the backend. Must be fixed in Step 17 (Frontend proxy step).
+#### Frontend Route (Fixed ✅)
+`frontend/src/app/api/generate/route.ts` previously passed `repo_url` as a **query param** — now correctly sends a JSON body. Fixed in pre-Step-8 review (`bc154ec`).
 
 #### respx Fixtures
 Shared respx fixtures use `assert_all_called=False` — this is correct, not a workaround.
@@ -161,7 +162,7 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 
 ### Items Pending ❗
 
-* **Step 8** – Frontend proxy route (tests + Vitest setup) — `route.ts` body-fix already applied ✅
+* **Step 8** – Frontend proxy route (tests + Vitest setup)
 * **Step 9** – Frontend UI MVP (form, markdown render)
 * **Step 10** – Frontend real-time status via SSE (backend stub + frontend stream consumer)
 * **Steps 11–19** – Backend pipeline: import graph → search index → LLM → evidence → page writing → pipeline orchestrator → wire endpoints
