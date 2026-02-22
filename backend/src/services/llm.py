@@ -29,7 +29,7 @@ import config
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_MODEL: str = "gpt-4o-mini"  # challenge.md says "gpt-5-mini"; map to valid id
+DEFAULT_MODEL: str = "gpt-5-mini"  # challenge.md says "gpt-5-mini"; map to valid id
 MAX_RETRIES: int = 2
 RETRY_DELAY: float = 1.0  # seconds between retries
 

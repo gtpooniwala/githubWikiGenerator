@@ -66,7 +66,8 @@ export default function Home() {
     }
   }, []);
 
-  // Auto-check health on mount (also warms up Cloud Run cold-start)
+  // Auto-check health on mount 
+  // warms up Cloud Run cold-start
   useEffect(() => {
     checkHealth();
   }, [checkHealth]);
@@ -148,7 +149,7 @@ export default function Home() {
                       : 'bg-red-500'
                   }`}
                 />
-                {healthStatus === 'checking' ? 'Checking…' : healthStatus === 'healthy' ? 'Backend healthy' : 'Backend unreachable'}
+                {healthStatus === 'checking' ? 'Checking…(It may take a few seconds to warm up the backend)' : healthStatus === 'healthy' ? 'Backend healthy' : 'Backend unreachable'}
               </span>
             )}
 

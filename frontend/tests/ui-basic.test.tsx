@@ -8,11 +8,14 @@ vi.mock('@/lib/api', () => ({
   checkHealth: vi.fn().mockResolvedValue({ status: 'healthy' }),
   // Default: never-resolving promise so tests control when wiki data arrives
   generateWiki: vi.fn(() => new Promise(() => {})),
+  // Default: pending — individual tests override as needed
+  askQuestion: vi.fn(() => new Promise(() => {})),
 }));
 
-import { checkHealth, generateWiki } from '@/lib/api';
+import { checkHealth, generateWiki, askQuestion } from '@/lib/api';
 import Home from '../src/app/page';
 import { RepoForm } from '../src/components/RepoForm';
+import { WikiViewer } from '../src/components/WikiViewer';
 
 // ---------------------------------------------------------------------------
 // MockEventSource — jsdom doesn't include EventSource
@@ -260,5 +263,137 @@ describe('Home page', () => {
     act(() => es.emit('signals_extracted', { message: 'Signals extracted', routes: 5, headings: 8, entrypoints: 2 }));
     await waitFor(() => expect(screen.getByText(/signals extracted/i)).toBeInTheDocument());
     expect(screen.getByText(/5 routes/)).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WikiViewer — Q&A panel
+// ---------------------------------------------------------------------------
+
+describe('WikiViewer Q&A', () => {
+  function renderViewer() {
+    return render(<WikiViewer data={MOCK_WIKI} />);
+  }
+
+  beforeEach(() => {
+    vi.mocked(askQuestion).mockReset();
+    vi.mocked(askQuestion).mockImplementation(() => new Promise(() => {})); // pending by default
+  });
+
+  it('renders the Q&A section heading and input', () => {
+    renderViewer();
+    expect(screen.getByRole('region', { name: /wiki q&a/i })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /ask a question about this wiki/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ask question/i })).toBeInTheDocument();
+  });
+
+  it('Ask button is disabled when input is empty', () => {
+    renderViewer();
+    const btn = screen.getByRole('button', { name: /ask question/i });
+    expect(btn).toBeDisabled();
+  });
+
+  it('Ask button is enabled when input has text', async () => {
+    const user = userEvent.setup();
+    renderViewer();
+    await user.type(
+      screen.getByRole('textbox', { name: /ask a question about this wiki/i }),
+      'How does auth work?',
+    );
+    expect(screen.getByRole('button', { name: /ask question/i })).not.toBeDisabled();
+  });
+
+  it('calls askQuestion with the question and wiki data when submitted', async () => {
+    vi.mocked(askQuestion).mockResolvedValueOnce({ answer: 'Auth uses JWT.' });
+    const user = userEvent.setup();
+    renderViewer();
+
+    await user.type(
+      screen.getByRole('textbox', { name: /ask a question about this wiki/i }),
+      'How does auth work?',
+    );
+    await user.click(screen.getByRole('button', { name: /ask question/i }));
+
+    expect(vi.mocked(askQuestion)).toHaveBeenCalledOnce();
+    expect(vi.mocked(askQuestion)).toHaveBeenCalledWith(
+      'How does auth work?',
+      MOCK_WIKI,
+    );
+  });
+
+  it('displays the answer after a successful askQuestion call', async () => {
+    vi.mocked(askQuestion).mockResolvedValueOnce({ answer: 'Auth uses JWT tokens.' });
+    const user = userEvent.setup();
+    renderViewer();
+
+    await user.type(
+      screen.getByRole('textbox', { name: /ask a question about this wiki/i }),
+      'How does auth work?',
+    );
+    await user.click(screen.getByRole('button', { name: /ask question/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/auth uses jwt tokens\./i)).toBeInTheDocument(),
+    );
+    // The question should also appear in the history
+    expect(screen.getByText('How does auth work?')).toBeInTheDocument();
+  });
+
+  it('shows an error alert when askQuestion rejects', async () => {
+    vi.mocked(askQuestion).mockRejectedValueOnce(new Error('Rate limit hit'));
+    const user = userEvent.setup();
+    renderViewer();
+
+    await user.type(
+      screen.getByRole('textbox', { name: /ask a question about this wiki/i }),
+      'What is this?',
+    );
+    await user.click(screen.getByRole('button', { name: /ask question/i }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.getByRole('alert')).toHaveTextContent('Rate limit hit');
+  });
+
+  it('disables input and shows loading state while waiting for answer', async () => {
+    // Keep askQuestion pending indefinitely
+    vi.mocked(askQuestion).mockImplementation(() => new Promise(() => {}));
+    const user = userEvent.setup();
+    renderViewer();
+
+    await user.type(
+      screen.getByRole('textbox', { name: /ask a question about this wiki/i }),
+      'What is this repo?',
+    );
+    await user.click(screen.getByRole('button', { name: /ask question/i }));
+
+    // Input should be disabled while loading
+    expect(
+      screen.getByRole('textbox', { name: /ask a question about this wiki/i }),
+    ).toBeDisabled();
+    // Button shows "Asking…" or "Waiting for answer" aria-label
+    expect(screen.getByRole('button', { name: /waiting for answer/i })).toBeInTheDocument();
+  });
+
+  it('accumulates multiple Q&A pairs in the history', async () => {
+    vi.mocked(askQuestion)
+      .mockResolvedValueOnce({ answer: 'First answer.' })
+      .mockResolvedValueOnce({ answer: 'Second answer.' });
+
+    const user = userEvent.setup();
+    renderViewer();
+
+    const input = screen.getByRole('textbox', { name: /ask a question about this wiki/i });
+
+    await user.type(input, 'Q1');
+    await user.click(screen.getByRole('button', { name: /ask question/i }));
+    await waitFor(() => expect(screen.getByText('First answer.')).toBeInTheDocument());
+
+    await user.type(input, 'Q2');
+    await user.click(screen.getByRole('button', { name: /ask question/i }));
+    await waitFor(() => expect(screen.getByText('Second answer.')).toBeInTheDocument());
+
+    // Both questions and answers should be in the history
+    expect(screen.getByText('Q1')).toBeInTheDocument();
+    expect(screen.getByText('Q2')).toBeInTheDocument();
   });
 });

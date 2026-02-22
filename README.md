@@ -4,24 +4,26 @@ Automatic wiki generator for public GitHub repositories. Analyses repo code and 
 
 ---
 
-## For Reviewers — Try the Live Demo
+## Usage — Try the Live Demo
 
 The app is fully deployed and ready to use. No setup required.
 
 **[Open the frontend](https://wiki-generator-frontend-254204084242.us-central1.run.app/)**
 
-1. The page may take **a few seconds to load** on first visit while the backend warms up. A health-check runs automatically — wait for it to show a green "healthy" status before proceeding.
+1. The page may take **a few seconds to load** on first visit while the frontend and backend warm up. A health-check runs automatically — wait for it to show a green "healthy" status before proceeding.
 2. Paste any **public GitHub repository URL** into the input box, or select one of the pre-filled examples.
 3. Click **Generate Wiki**.
 4. Watch live progress as the pipeline runs. Wiki generation typically completes in **under 5 minutes**.
+5. Once the wiki appears, use the **Ask the wiki** panel at the bottom of the content area to ask questions about the repository — the entire generated wiki is used as context for each answer.
 
 The output includes an **Overview page** (what the project does, architecture, quickstart) and a set of **Feature pages** — one per user-facing feature, each with inline citations that link to the exact source lines on GitHub at the analysed commit SHA.
 
 > **Note on architecture:** The backend is separate from the frontend and requires an API key to call directly (to prevent abuse, since each request triggers multiple LLM calls). The frontend proxies requests transparently, so from a reviewer's perspective you just use the URL above.
 
 **Having trouble?**
+
 - If the page or health-check takes **longer than ~1 minute** to respond, or if you see an error, please reach out to me directly.
-- If wiki generation takes **longer than 5 minutes**, something has gone wrong — contact me and I'll look into it.
+- If wiki generation takes **longer than 10 minutes**, something has gone wrong — contact me and I'll look into it.
 
 ---
 
@@ -94,19 +96,23 @@ BACKEND_API_KEY=<same app auth key as backend>
 ## API
 
 ### `GET /health`
+
 ```json
 { "status": "healthy" }
 ```
 
 ### `POST /api/generate`
+
 Headers: `x-api-key: <BACKEND_API_KEY>`
 
 Request:
+
 ```json
 { "repo_url": "https://github.com/owner/repo" }
 ```
 
 Response:
+
 ```json
 {
   "repo_id": "owner/repo",
@@ -117,6 +123,26 @@ Response:
   ]
 }
 ```
+
+### `POST /api/qa`
+Headers: `x-api-key: <BACKEND_API_KEY>`
+
+Request:
+```json
+{
+  "repo_id": "owner/repo",
+  "question": "How does authentication work?",
+  "overview_md": "...",
+  "features": [{ "id": "...", "title": "...", "description": "...", "content_md": "..." }]
+}
+```
+
+Response:
+```json
+{ "answer": "..." }
+```
+
+The full wiki (overview + all feature pages) is passed as context in a single LLM call. No retrieval step is needed — the complete wiki fits well within `gpt-5-mini`'s 400,000 token context window.
 
 ## How It Works
 
@@ -176,10 +202,10 @@ GitHub URL
 | 5 | Chunk files | `chunker.py` | — |
 | 6 | Build import graph | `import_graph.py` (Python `import` + JS/TS `import`/`require`) | — |
 | 7 | Build search index | `search_index.py` (BM25) | — |
-| 8 | Propose features | `propose_features.py` | ✓ `gpt-4o-mini` |
+| 8 | Propose features | `propose_features.py` | ✓ `gpt-5-mini` |
 | 9 | Gather evidence | `evidence.py` (seed → graph expand → BM25 → dedup) | — |
-| 10 | Write feature pages | `write_pages.py` → `citations.py` (chunk ID → permalink) | ✓ `gpt-4o-mini` × N |
-| 11 | Write overview | `write_pages.py` | ✓ `gpt-4o-mini` |
+| 10 | Write feature pages | `write_pages.py` → `citations.py` (chunk ID → permalink) | ✓ `gpt-5-mini` × N |
+| 11 | Write overview | `write_pages.py` | ✓ `gpt-5-mini` |
 | 12 | Assemble response | `pipeline.py` | — |
 
 ### SSE streaming
@@ -214,8 +240,12 @@ This project was built for the **cubic Coding Challenge** — a 48-hour sprint t
 - **Parallel feature page writing** — feature pages are written sequentially (one LLM call completes before the next starts). All evidence packs are independent so this is trivially parallelisable with a thread pool, cutting total LLM wall-clock time from ~N×4s to ~4s regardless of feature count.
 - **Seed path and citation validation** — the LLM sometimes returns `seed_paths` that don't exist in the snapshot, silently producing thin evidence packs. Separately, the citation resolver converts any `[path:N-M]` pattern to a GitHub URL without checking the path was actually analyzed; hallucinated paths become valid-looking links that 404. Both are fixable with a membership check against the known file list and chunk ID set.
 - **Richer feature proposal context** — the LLM currently sees only file paths, README headings, and HTTP routes when proposing features. Adding the top-level symbol names per file (function/class names already identified by the chunker's semantic boundary pass) would give it real code signal at near-zero token cost and improve seed path accuracy for repos with sparse READMEs.
-- **Search / Q&A** across wiki pages — the bonus feature from the spec; a BM25 or embedding search over generated pages would be straightforward given the existing `SearchIndex` infrastructure.
 - **Caching** — cache generated wikis keyed by `(owner, repo, commit_sha)` so repeat requests on the same commit are instant and don't burn OpenAI quota.
+
+
+### Bonus features implemented
+
+- **Q&A across the wiki** — an "Ask the wiki" panel lives at the bottom of every wiki page. The full generated wiki (overview + all feature pages, typically 3–8k tokens) is passed as context to a single `gpt-5-mini` call, giving the model cross-page awareness. No retrieval step is needed at this scale.
 
 ### What isn’t production-ready
 

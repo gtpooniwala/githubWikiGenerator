@@ -18,6 +18,10 @@ export interface GenerateResponse {
   features: WikiFeature[];
 }
 
+export interface QAResponse {
+  answer: string;
+}
+
 export async function checkHealth(): Promise<HealthResponse> {
   const response = await fetch('/api/health');
   if (!response.ok) {
@@ -40,5 +44,28 @@ export async function generateWiki(repoUrl: string): Promise<GenerateResponse> {
     throw new Error(error.detail || `Request failed: ${response.status}`);
   }
   
+  return response.json();
+}
+
+export async function askQuestion(
+  question: string,
+  wiki: GenerateResponse,
+): Promise<QAResponse> {
+  const response = await fetch('/api/qa', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question,
+      repo_id: wiki.repo_id,
+      overview_md: wiki.overview_md,
+      features: wiki.features,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    throw new Error(error.detail || `Request failed: ${response.status}`);
+  }
+
   return response.json();
 }
