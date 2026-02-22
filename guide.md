@@ -1206,6 +1206,12 @@ Frontend Cloud Run:
 * Consider parallelizing independent steps (e.g., chunking and evidence gathering for different features) to reduce overall latency
 * Implement pagination or streaming of results to frontend if response size becomes an issue
 
+## Step 26: Other ToDos
+
+* Review README and update with context, opinions, final instructions, architecture overview, and any other relevant information for users, reviewers and future maintainers
+* Analyse the current implementation for any potential security issues (e.g., injection attacks via repo URLs, LLM prompt injection, etc.) and implement mitigations as needed
+* Learn current logic and how it handles edge cases (e.g., repos with no README, repos with very large files, etc.) to be able to debug and improve based on user feedback
+
 # Appendices
 
 ## Appendix A: LLM Prompts (Templates)

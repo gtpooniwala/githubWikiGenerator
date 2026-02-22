@@ -9,6 +9,12 @@ interface RepoFormProps {
 
 const PLACEHOLDER = 'https://github.com/owner/repo';
 const FEATURED_REPO = 'https://github.com/gtpooniwala/githubWikiGenerator';
+const MY_REPOS = [
+  'https://github.com/gtpooniwala/pushstart',
+  'https://github.com/gtpooniwala/personal-agent',
+  'https://github.com/gtpooniwala/LBSchatbot',
+  'https://github.com/gtpooniwala/resumebuilder',
+];
 const EXAMPLE_REPOS = [
   'https://github.com/tastejs/todomvc',
   'https://github.com/browser-use/browser-use',
@@ -85,6 +91,21 @@ export function RepoForm({ onSubmit, loading }: RepoFormProps) {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2 items-center">
+        <span className="text-xs text-slate-500">More of Gaurav's repos:</span>
+        {MY_REPOS.map((repo) => (
+          <button
+            key={repo}
+            type="button"
+            disabled={loading}
+            onClick={() => setRepoUrl(repo)}
+            className="text-xs text-blue-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {repo.replace('https://github.com/', '')}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-2 items-center">
         <span className="text-xs text-slate-500">Or try:</span>
         {EXAMPLE_REPOS.map((repo) => (
           <button
@@ -92,7 +113,7 @@ export function RepoForm({ onSubmit, loading }: RepoFormProps) {
             type="button"
             disabled={loading}
             onClick={() => setRepoUrl(repo)}
-            className="text-xs text-blue-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-xs text-slate-500 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {repo.replace('https://github.com/', '')}
           </button>
