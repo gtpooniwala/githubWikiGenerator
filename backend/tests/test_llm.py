@@ -107,13 +107,6 @@ class TestChatText:
         _, kwargs = client.chat.completions.create.call_args
         assert kwargs["model"] == llm_module.DEFAULT_MODEL
 
-    def test_custom_temperature(self):
-        client = _mock_client("ok")
-        _set_client(client)
-        chat_text("s", "u", temperature=0.9)
-        _, kwargs = client.chat.completions.create.call_args
-        assert kwargs["temperature"] == 0.9
-
     def test_none_content_returns_empty_string(self):
         client = MagicMock()
         client.chat.completions.create.return_value = _make_response(None)

@@ -826,7 +826,7 @@ All OpenAI interaction goes through `services/llm.py`.
 
 1. Implement `services/llm.py`:
 
-   * `chat_text(system, user, model="gpt-5-mini", temperature=0.2)` that returns raw text
+   * `chat_text(system, user, model="gpt-5-mini")` that returns raw text
    * `chat_json(system, user, schema_hint)` that:
 
      * enforces JSON-only output

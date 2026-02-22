@@ -75,7 +75,7 @@ def qa(body: QARequest, _: None = Depends(require_api_key)) -> QAResponse:
     user_message = _build_user_message(body)
 
     try:
-        answer = llm.chat_text(_SYSTEM, user_message, temperature=0.3)
+        answer = llm.chat_text(_SYSTEM, user_message)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

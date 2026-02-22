@@ -2,7 +2,7 @@
 
 Public API
 ----------
-``chat_text(system, user, *, model, temperature)``
+``chat_text(system, user, *, model)``
     Returns raw text from the model.
 
 ``chat_json(system, user, schema, *, model)``
@@ -117,7 +117,6 @@ def chat_text(
     user: str,
     *,
     model: str = DEFAULT_MODEL,
-    temperature: float = 0.2,
 ) -> str:
     """Call the chat completions API and return the raw text response.
 
@@ -125,7 +124,6 @@ def chat_text(
         system:      System prompt.
         user:        User message.
         model:       Model identifier.
-        temperature: Sampling temperature.
 
     Returns:
         The assistant's reply as a plain string.
@@ -138,7 +136,6 @@ def chat_text(
     def _call():
         response = client.chat.completions.create(
             model=model,
-            temperature=temperature,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -186,7 +183,6 @@ def chat_json(
     def _call():
         response = client.chat.completions.create(
             model=model,
-            temperature=0.2,
             messages=[
                 {"role": "system", "content": json_system},
                 {"role": "user", "content": user},

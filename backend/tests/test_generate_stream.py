@@ -83,9 +83,7 @@ def mock_pipeline():
             return_value={},
         ) as mock_ig,
         patch("routers.generate.SearchIndex") as _mock_si_cls,
-        patch(
-            "routers.generate.propose_features", return_value=proposal
-        ) as mock_pf,
+        patch("routers.generate.propose_features", return_value=proposal) as mock_pf,
         patch(
             "routers.generate.gather_all_evidence",
             return_value={"feat-0": MagicMock()},
@@ -256,4 +254,3 @@ def test_stream_calls_real_services(mock_pipeline):
     mock_pipeline["gather_all_evidence"].assert_called_once()
     mock_pipeline["write_all_feature_pages"].assert_called_once()
     mock_pipeline["write_overview_page"].assert_called_once()
-

@@ -26,11 +26,26 @@ from services.signals import RepoSignals
 # ---------------------------------------------------------------------------
 
 # Titles containing these words describe technical layers, not user features.
-BANNED_TITLE_WORDS: frozenset[str] = frozenset({
-    "utils", "util", "helpers", "helper", "components", "component",
-    "frontend", "backend", "middleware", "infrastructure", "config",
-    "configuration", "misc", "miscellaneous", "common", "shared",
-})
+BANNED_TITLE_WORDS: frozenset[str] = frozenset(
+    {
+        "utils",
+        "util",
+        "helpers",
+        "helper",
+        "components",
+        "component",
+        "frontend",
+        "backend",
+        "middleware",
+        "infrastructure",
+        "config",
+        "configuration",
+        "misc",
+        "miscellaneous",
+        "common",
+        "shared",
+    }
+)
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
@@ -126,7 +141,9 @@ def _slugify(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def propose_features(snapshot: RepoSnapshot, signals: RepoSignals) -> FeatureProposalList:
+def propose_features(
+    snapshot: RepoSnapshot, signals: RepoSignals
+) -> FeatureProposalList:
     """Call the LLM to propose 5–9 user-facing features for the repository.
 
     Args:
