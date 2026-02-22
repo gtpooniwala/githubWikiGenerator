@@ -94,19 +94,20 @@ Step X: <short name>
 | 7 | Signals extraction | `4caff95` | `services/signals.py` — README, routes, entrypoints |
 | 7a | Bug-fix pass (Steps 1–7) | `bc154ec` | `_parse_repo_id` rstrip→removesuffix; CI deploy URL fix; `GenerateResponse` type fix; `--allow-unauthenticated` added to both CI workflows |
 | 8 | Frontend proxy route + Vitest | `5afdbc6` | `vitest.config.ts`, `vitest.setup.ts`, `tests/route-generate.test.ts` — 7 frontend tests |
+| 9 | Frontend UI MVP | `60bff50` | `RepoForm`, `WikiViewer`, `Markdown` components; `page.tsx` rewrite; `react-markdown`; 10 UI tests |
 
 **74 backend tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`.
-**7 frontend tests passing** in `tests/route-generate.test.ts`.
+**17 frontend tests passing**: `route-generate.test.ts` (7) + `ui-basic.test.tsx` (10).
 
 ### Next Step
 
-**STEP 9: Frontend – UI MVP (Form + Render)**
+**STEP 10: Frontend – Real-time Status via SSE**
 
 ### Deployment
 
 * **Backend Cloud Run URL:** `https://wiki-generator-backend-ud74aktrjq-uc.a.run.app`
 * **GCP project:** `pushstart-481717`, region `us-central1`
-* **Latest deployed commit:** `5afdbc6` (Step 8)
+* **Latest deployed commit:** `60bff50` (Step 9)
 * Smoke checks: `GET /health` → `{"status":"healthy"}` ✅
 
 ### Critical Technical Context (for new sessions)
@@ -164,7 +165,6 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 
 ### Items Pending ❗
 
-* **Step 9** – Frontend UI MVP (form, markdown render, loading/error states)
 * **Step 10** – Frontend real-time status via SSE (backend stub + frontend stream consumer)
 * **Steps 11–19** – Backend pipeline: import graph → search index → LLM client → feature proposals → evidence gathering → page writing → overview page → pipeline orchestrator → wire endpoint
 * **Step 20** – Frontend navigable wiki pages (sidebar, `/wiki/[owner]/[repo]` route)
