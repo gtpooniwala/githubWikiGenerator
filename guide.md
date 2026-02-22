@@ -95,19 +95,20 @@ Step X: <short name>
 | 7a | Bug-fix pass (Steps 1–7) | `bc154ec` | `_parse_repo_id` rstrip→removesuffix; CI deploy URL fix; `GenerateResponse` type fix; `--allow-unauthenticated` added to both CI workflows |
 | 8 | Frontend proxy route + Vitest | `5afdbc6` | `vitest.config.ts`, `vitest.setup.ts`, `tests/route-generate.test.ts` — 7 frontend tests |
 | 9 | Frontend UI MVP | `60bff50` | `RepoForm`, `WikiViewer`, `Markdown` components; `page.tsx` rewrite; `react-markdown`; 10 UI tests |
+| 10 | Real-time SSE status updates | `91d51d0` | `generate.py` real pipeline (repo_loaded→chunked→signals_extracted→done); `stream/route.ts` proxy; `page.tsx` EventSource consumer; 10 backend + 6 frontend new tests |
 
-**74 backend tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`.
-**17 frontend tests passing**: `route-generate.test.ts` (7) + `ui-basic.test.tsx` (10).
+**84 backend tests passing** across: `test_health`, `test_auth`, `test_schemas`, `test_file_filter`, `test_github_client`, `test_repo_loader`, `test_chunker`, `test_signals`, `test_generate_stream`.
+**23 frontend tests passing**: `route-generate.test.ts` (7) + `route-stream.test.ts` (5) + `ui-basic.test.tsx` (11).
 
 ### Next Step
 
-**STEP 10: Frontend – Real-time Status via SSE**
+**STEP 11: Backend – File-level Import Graph**
 
 ### Deployment
 
 * **Backend Cloud Run URL:** `https://wiki-generator-backend-ud74aktrjq-uc.a.run.app`
 * **GCP project:** `pushstart-481717`, region `us-central1`
-* **Latest deployed commit:** `60bff50` (Step 9)
+* **Latest deployed commit:** `91d51d0` (Step 10 — redeploy pending)
 * Smoke checks: `GET /health` → `{"status":"healthy"}` ✅
 
 ### Critical Technical Context (for new sessions)
@@ -148,6 +149,18 @@ backend/src/
 #### Frontend Route (Fixed ✅)
 `frontend/src/app/api/generate/route.ts` previously passed `repo_url` as a **query param** — now correctly sends a JSON body. Fixed in pre-Step-8 review (`bc154ec`).
 
+#### Backend Test Auth Pattern (Critical)
+`config.API_KEY` is a **module-level constant** (`API_KEY = os.environ.get("BACKEND_API_KEY", "")` evaluated at import time).  
+`monkeypatch.setenv` does **not** work in backend tests — the value is already cached.  
+Always use: `monkeypatch.setattr(config, "API_KEY", "test-key")` in every backend test that touches auth.
+
+#### SSE Architecture (Step 10+)
+`GET /api/generate/stream?repo_url=<url>` (FastAPI) streams `text/event-stream` with named events:
+`repo_loaded` → `chunked` → `signals_extracted` → `features_proposed` → `pages_written` → `done` (or `error`)  
+Each `data:` payload is a JSON object `{ "message": "...", ...stage-specific fields }`.  
+Next.js proxy at `frontend/src/app/api/generate/stream/route.ts` forwards `repo_url` param + `x-api-key` header.  
+Browser `EventSource` in `page.tsx` parses per-event JSON to present status messages + detail lines.
+
 #### respx Fixtures
 Shared respx fixtures use `assert_all_called=False` — this is correct, not a workaround.
 
@@ -165,7 +178,6 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 
 ### Items Pending ❗
 
-* **Step 10** – Frontend real-time status via SSE (backend stub + frontend stream consumer)
 * **Steps 11–19** – Backend pipeline: import graph → search index → LLM client → feature proposals → evidence gathering → page writing → overview page → pipeline orchestrator → wire endpoint
 * **Step 20** – Frontend navigable wiki pages (sidebar, `/wiki/[owner]/[repo]` route)
 * **Step 21** – CI test gating
@@ -316,17 +328,17 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
    - Frontend should forward an app-specific API key in the `x-api-key` header (this is an application-level key used to authenticate frontend→backend requests, not the OpenAI key).
    - The backend must validate the app `x-api-key` and then use `OPENAI_API_KEY` from its environment for LLM calls. Do NOT expose `OPENAI_API_KEY` to the client.
 
-## Citations (Verification)
+<!-- ## Citations (Verification) Ask user before implementing this. We may change this logic
 
 - All inline citations must be deterministic and point to the analyzed `commit_sha` using GitHub blob URLs with line anchors (for example: `https://github.com/owner/repo/blob/<commit_sha>/path/to/file.py#L10-L20`).
 - Add a small verification test that asserts generated markdown contains at least one citation matching the returned `commit_sha`.
 - Store the `commit_sha` returned by the repo snapshot step and use it for all citation links so links remain stable and auditable.
 
----
+--- -->
 
 # Implementation Steps (Atomic, Test-Driven)
 
-> Each step ends with: tests pass → approval → commit → deploy → smoke checks.
+> Each step ends with: tests pass → approval → update guide.md -> commit → deploy → smoke checks.
 
 ---
 
