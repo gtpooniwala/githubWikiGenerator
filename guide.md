@@ -109,20 +109,26 @@ Step X: <short name>
 | 19 | Wire `/api/generate` endpoint | `5e613e4` | `routers/generate.py` calls `run_pipeline()`; `test_schemas.py` + `test_auth.py` mock pipeline; 284 backend |
 | 20 | Frontend navigable wiki | `ba327e7` | `page.tsx` renders `WikiViewer` after SSE+POST; `/wiki/[owner]/[repo]` standalone page; 28 frontend tests |
 | 21 | CI tests gate deploy | `ae80e65` | `test.yml` (backend pytest + frontend vitest+build); deploy workflows gate on `needs: test` |
+| 22 | Deploy + smoke checks | `029abb8` | All CI green ✅; backend rev `wiki-generator-backend-00037-ls6`; frontend rev `wiki-generator-frontend-00020-tlp`; both services healthy |
 
 **284 backend tests passing** across all test files.
 **28 frontend tests passing**: `route-generate.test.ts` (7) + `route-stream.test.ts` (5) + `ui-basic.test.tsx` (16).
 
 ### Next Step
 
-**STEP 22: Deploy + Smoke Checks**
+**STEP 23: Miscellaneous Polish**
 
 ### Deployment
 
 * **Backend Cloud Run URL:** `https://wiki-generator-backend-ud74aktrjq-uc.a.run.app`
+* **Frontend Cloud Run URL:** `https://wiki-generator-frontend-254204084242.us-central1.run.app`
 * **GCP project:** `pushstart-481717`, region `us-central1`
-* **Latest deployed commit:** `ba327e7` (Step 20: navigable wiki pages; CI redeploys on push to `backend/**`)
-* Smoke checks: `GET /health` → `{"status":"healthy"}` ✅
+* **Latest deployed commit:** `029abb8` (Step 21 SHA update; CI deploys on push to `backend/**` / `frontend/**`)
+* Smoke checks:
+  * Backend `GET /health` → `{"status":"healthy"}` ✅
+  * Frontend `GET /api/health` → `{"status":"healthy"}` ✅
+  * Backend `POST /api/generate` (no key) → `401` ✅
+  * CI: Tests workflow + both deploy workflows all green ✅
 
 ### Critical Technical Context (for new sessions)
 
@@ -211,8 +217,7 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 
 ### Items Pending ❗
 
-* **Step 22** – Final deploy + smoke checks
-* **Step 23** – Miscellaneous polish
+* **Step 23** – Miscellaneous polish (test cleanup, README usage docs, memory management)
 
 ---
 
@@ -1153,6 +1158,10 @@ Frontend Cloud Run:
   * `GET /api/health`
   * `POST /api/generate` with sample repo
 
+* e2e test:
+
+  * User can generate wiki for a known small repo and see expected features
+
 ---
 
 ## Step 23: Miscellaneous Polish 
@@ -1168,7 +1177,26 @@ Frontend Cloud Run:
 
   * ensure no large objects retained in memory longer than needed(primarily github downloads and LLM responses)
   * consider streaming LLM calls if response size is large
+* Add logging for better observability (Cloud Run logs)
 
+## Step 24: Quality Improvements
+
+### Implement these in collaboration with user feedback and observed issues from initial runs:
+
+* Analyse final output quality and identify common failure modes (e.g., hallucinated citations, missed features, etc.)
+* Check intermediate outputs for debugging:
+
+  * proposed features
+  * evidence packs
+  * generated markdown before citation resolution 
+
+* Improve algorithms and prompts based on observed issues:
+
+  * better chunking strategies(AST if it is easy and helps with citations/accuracy)
+  * more precise LLM instructions
+  * Multi-stage writing (outline → draft → final or Intermediate function-wise or file-wise summaries) if it improves structure and citation quality
+  * More LLM usage in different steps
+  * improved citation parsing and linking
 
 # Appendices
 
