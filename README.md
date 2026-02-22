@@ -2,6 +2,30 @@
 
 Automatic wiki generator for public GitHub repositories. Analyses repo code and produces user-facing feature documentation with inline source citations.
 
+---
+
+## For Reviewers — Try the Live Demo
+
+The app is fully deployed and ready to use. No setup required.
+
+**[Open the frontend](https://wiki-generator-frontend-254204084242.us-central1.run.app/)**
+
+1. The page may take **a few seconds to load** on first visit while the backend warms up. A health-check runs automatically — wait for it to show a green "healthy" status before proceeding.
+2. Paste any **public GitHub repository URL** into the input box, or select one of the pre-filled examples.
+3. Click **Generate Wiki**.
+4. Watch live progress as the pipeline runs. Wiki generation typically completes in **under 5 minutes**.
+
+The output includes an **Overview page** (what the project does, architecture, quickstart) and a set of **Feature pages** — one per user-facing feature, each with inline citations that link to the exact source lines on GitHub at the analysed commit SHA.
+
+> **Note on architecture:** The backend is separate from the frontend and requires an API key to call directly (to prevent abuse, since each request triggers multiple LLM calls). The frontend proxies requests transparently, so from a reviewer's perspective you just use the URL above.
+
+**Having trouble?**
+- If the page or health-check takes **longer than ~1 minute** to respond, or if you see an error, please reach out to me directly.
+- If wiki generation takes **longer than 5 minutes**, something has gone wrong — contact me and I'll look into it.
+
+---
+
+
 ## Architecture
 
 | Layer | Tech | Deployed |
@@ -27,17 +51,6 @@ Automatic wiki generator for public GitHub repositories. Analyses repo code and 
 |---------|-----|
 | Backend | `https://wiki-generator-backend-ud74aktrjq-uc.a.run.app` |
 | Frontend | `https://wiki-generator-frontend-254204084242.us-central1.run.app/` |
-
-## Usage
-
-1. Open the [frontend URL](https://wiki-generator-frontend-254204084242.us-central1.run.app/).
-2. Paste any **public GitHub repository URL** into the input field (e.g. `https://github.com/browser-use/browser-use`).
-3. Click **Generate Wiki**. A status bar streams live progress while the backend analyses the repo.
-4. Once complete, the wiki renders with:
-   - An **Overview** page (what the project does, architecture, quickstart)
-   - **Feature pages** — one per user-facing feature, with inline citations linking to the exact source lines on GitHub
-   - A **sidebar** for navigation between pages
-5. Each citation link opens the relevant code on GitHub at the analysed commit SHA (stable, not `HEAD`).
 
 ## Local Development
 
