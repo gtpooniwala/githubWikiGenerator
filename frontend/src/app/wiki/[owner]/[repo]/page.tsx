@@ -83,17 +83,20 @@ export default function WikiPage({ params }: WikiPageProps) {
     });
 
     es.addEventListener('error', (e: MessageEvent) => {
-      let msg = 'Stream error';
-      try { msg = JSON.parse(e.data)?.message ?? msg; } catch { /* ignore */ }
+      // Named server-sent "error" event: e.data is the JSON payload.
+      // Connection-level errors also fire this listener but have no e.data.
+      let msg = 'Connection to server lost. The request may have timed out — please try again.';
+      try { msg = JSON.parse(e.data)?.message ?? msg; } catch { /* ignore — e.data absent on connection errors */ }
       setError(msg);
       es.close();
       setLoading(false);
     });
 
     es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) {
-        setLoading(false);
-      }
+      // Fallback: ensure the page never stays blank if the named-event listener
+      // didn't fire (e.g. stream closed before the first event was received).
+      setError((prev) => prev ?? 'Connection to server lost. The request may have timed out — please try again.');
+      setLoading(false);
     };
 
     return () => es.close();
