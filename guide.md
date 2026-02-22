@@ -110,13 +110,14 @@ Step X: <short name>
 | 20 | Frontend navigable wiki | `ba327e7` | `page.tsx` renders `WikiViewer` after SSE+POST; `/wiki/[owner]/[repo]` standalone page; 28 frontend tests |
 | 21 | CI tests gate deploy | `ae80e65` | `test.yml` (backend pytest + frontend vitest+build); deploy workflows gate on `needs: test` |
 | 22 | Deploy + smoke checks | `029abb8` | All CI green ✅; backend rev `wiki-generator-backend-00037-ls6`; frontend rev `wiki-generator-frontend-00020-tlp`; both services healthy |
+| 23 | Miscellaneous polish | `pending` | Memory: free non-overview file content after import graph; stale SSE comment fixed; README: Usage + Challenge Notes sections |
 
 **284 backend tests passing** across all test files.
 **28 frontend tests passing**: `route-generate.test.ts` (7) + `route-stream.test.ts` (5) + `ui-basic.test.tsx` (16).
 
 ### Next Step
 
-**STEP 23: Miscellaneous Polish**
+**All steps complete ✅**
 
 ### Deployment
 
@@ -217,7 +218,7 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 
 ### Items Pending ❗
 
-* **Step 23** – Miscellaneous polish (test cleanup, README usage docs, memory management)
+* None — all 23 steps complete.
 
 ---
 
@@ -1197,6 +1198,13 @@ Frontend Cloud Run:
   * Multi-stage writing (outline → draft → final or Intermediate function-wise or file-wise summaries) if it improves structure and citation quality
   * More LLM usage in different steps
   * improved citation parsing and linking
+
+## Step 25: Optimization and Scaling(Optional, ask user before implementing)
+
+* Profile the application to identify bottlenecks (e.g., GitHub API calls, LLM response times, etc.)
+* Implement caching strategies where appropriate (e.g., caching GitHub API responses, LLM outputs for repeated inputs, etc.)
+* Consider parallelizing independent steps (e.g., chunking and evidence gathering for different features) to reduce overall latency
+* Implement pagination or streaming of results to frontend if response size becomes an issue
 
 # Appendices
 

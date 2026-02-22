@@ -45,6 +45,40 @@ from services.signals import (
 from services.write_pages import write_all_feature_pages, write_overview_page
 
 # ---------------------------------------------------------------------------
+# Overview-file content retention set
+# ---------------------------------------------------------------------------
+# After chunking and building the import graph we no longer need the raw file
+# content for most files.  We keep only README / manifest / entrypoint content
+# because write_overview_page() reads it directly.
+_OVERVIEW_KEEP_CONTENT: frozenset[str] = frozenset(
+    {
+        "readme.md",
+        "readme.rst",
+        "readme.txt",
+        "readme",
+        "package.json",
+        "pyproject.toml",
+        "setup.py",
+        "setup.cfg",
+        "requirements.txt",
+        "cargo.toml",
+        "go.mod",
+        "main.py",
+        "__main__.py",
+        "app.py",
+        "server.py",
+        "index.ts",
+        "index.js",
+        "index.tsx",
+        "main.ts",
+        "app.ts",
+        "wsgi.py",
+        "asgi.py",
+    }
+)
+
+
+# ---------------------------------------------------------------------------
 # URL parsing
 # ---------------------------------------------------------------------------
 
@@ -167,6 +201,13 @@ def run_pipeline(repo_url: str, *, debug: bool = False) -> GenerateResponse:
             "import_graph",
             {"edges": sum(len(v) for v in import_graph.values())},
         )
+
+    # Free raw file content for non-overview files — chunks hold all the text
+    # we need for the LLM stages, and keeping large source blobs in memory
+    # through the LLM calls wastes RAM unnecessarily.
+    for _fe in snapshot.files:
+        if _fe.path.rsplit("/", 1)[-1].lower() not in _OVERVIEW_KEEP_CONTENT:
+            _fe.content = ""
 
     # ------------------------------------------------------------------
     # 5. Build search index

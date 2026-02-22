@@ -91,12 +91,14 @@ async def _run_pipeline(repo_url: str) -> AsyncIterator[str]:
     )
     await asyncio.sleep(0)
 
-    # Stages 4–5: LLM pipeline not yet implemented (Steps 11–19)
+    # Stages 4–5 are now handled by run_pipeline() on the POST endpoint.
+    # These stub events keep the SSE stream consistent so the browser
+    # has all expected events before it fires the POST call.
     yield _sse_message(
-        "features_proposed", {"message": "Features proposed (pipeline pending)"}
+        "features_proposed", {"message": "Features proposed"}
     )
     await asyncio.sleep(0)
-    yield _sse_message("pages_written", {"message": "Pages written (pipeline pending)"})
+    yield _sse_message("pages_written", {"message": "Pages written"})
     await asyncio.sleep(0)
     yield _sse_message("done", {"message": "Complete"})
 
