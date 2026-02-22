@@ -1209,6 +1209,9 @@ Frontend Cloud Run:
 ## Step 26: Other ToDos
 
 * Review README and update with context, opinions, final instructions, architecture overview, and any other relevant information for users, reviewers and future maintainers
+  * Goals and motivations- low latency, low cost, low hallucinations, high precision for relevance in context
+  * Architectural decisions and trade-offs (e.g., why FastAPI, why BM25-like search, etc.)
+  * Possible alternatives and why they were not chosen (e.g., using a vector database for search, using a more complex orchestration framework, more llm usage for decisionmaking, graphrag for relevance etc.)
 * Analyse the current implementation for any potential security issues (e.g., injection attacks via repo URLs, LLM prompt injection, etc.) and implement mitigations as needed
 * Learn current logic and how it handles edge cases (e.g., repos with no README, repos with very large files, etc.) to be able to debug and improve based on user feedback
 
